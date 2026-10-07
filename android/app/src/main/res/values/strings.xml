@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">محاكي XIM</string>
+    <string name="service_name">محاكي XIM — التحكم بالألعاب</string>
+    <string name="service_description">يحوّل الماوس ولوحة المفاتيح ويد التحكم إلى لمسات داخل الألعاب والتطبيقات الأخرى. لا يقرأ محتوى الشاشة ولا يجمع أي بيانات.</string>
 </resources>
