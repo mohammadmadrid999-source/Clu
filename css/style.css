@@ -105,3 +105,27 @@ select, input[type=text] { background: var(--card); border: 1px solid var(--line
   .layout { grid-template-columns: 1fr; grid-template-areas: "arena" "panel" "bottom"; }
   .panel { max-height: none; }
 }
+
+/* ---------- touch mode (phones / Android) ---------- */
+.touch-layer { position: absolute; inset: 0; direction: ltr; touch-action: none; user-select: none; -webkit-user-select: none; }
+.touch-layer.hidden { display: none; }
+.look-pad { position: absolute; inset: 0; }
+.joy {
+  position: absolute; left: max(24px, env(safe-area-inset-left)); bottom: 24px; width: 130px; height: 130px;
+  border-radius: 50%; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.18);
+  display: grid; place-items: center; touch-action: none;
+}
+.joy .knob { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,.28); pointer-events: none; }
+.tbtns { position: absolute; right: max(24px, env(safe-area-inset-right)); bottom: 24px; display: grid; grid-template-columns: auto auto; gap: 14px; align-items: end; }
+.tbtn {
+  width: 74px; height: 74px; border-radius: 50%; font-weight: 700; touch-action: none;
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.25);
+}
+.tbtn.fire { width: 92px; height: 92px; background: rgba(255,77,77,.35); border-color: var(--accent); }
+.tbtn.small-b { width: 56px; height: 56px; grid-column: 2; justify-self: center; }
+.tbtn.on { background: var(--accent); }
+.texit { position: absolute; top: 8px; right: max(8px, env(safe-area-inset-right)); width: 40px; height: 40px; border-radius: 50%; }
+
+body.touch-mode { overflow: hidden; }
+body.touch-mode .arena-wrap { position: fixed; inset: 0; z-index: 50; border-radius: 0; border: 0; min-height: 0; }
+body.touch-mode .hud { top: 8px; left: 50%; transform: translateX(-50%); inset-inline-start: auto; }

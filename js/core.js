@@ -147,6 +147,7 @@
       assistSlowdown: 0.55,
       adsZoom: 1.6,
       adsTurnScale: 0.6,
+      touchGain: 4,    // touch pixels -> simulated mouse counts
     };
   }
 

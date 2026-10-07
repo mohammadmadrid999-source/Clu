@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>محاكي XIM Matrix</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -22,8 +22,18 @@
       <canvas id="arena"></canvas>
       <div id="arenaOverlay" class="overlay">
         <h2>ميدان التصويب</h2>
-        <p>اضغط هنا لالتقاط الماوس. حرّك الماوس ليتحوّل إلى عصا تحكم يمنى كما يفعل XIM.</p>
+        <p>اضغط هنا للبدء. على الكمبيوتر يُلتقط الماوس، وعلى الهاتف يُفتح وضع اللمس: اسحب بإصبعك للتصويب واستخدم العصا الافتراضية للحركة.</p>
         <p class="hint">زر الماوس الأيسر = RT (إطلاق) · الأيمن = LT (تصويب ADS) · WASD = العصا اليسرى · Esc للخروج</p>
+      </div>
+      <div id="touchLayer" class="touch-layer hidden">
+        <div id="lookPad" class="look-pad"></div>
+        <div id="joy" class="joy"><div class="knob"></div></div>
+        <div class="tbtns">
+          <button class="tbtn ads" data-btn="LT">ADS</button>
+          <button class="tbtn fire" data-btn="RT">إطلاق</button>
+          <button class="tbtn small-b" data-btn="A">A</button>
+        </div>
+        <button id="tExit" class="texit">✕</button>
       </div>
       <div class="hud">
         <span>الإصابات: <b id="hits">0</b></span>

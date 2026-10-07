@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.xim.simulator'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.xim.simulator'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the debug key so the APK installs directly on a phone.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.assets.srcDirs += layout.buildDirectory.dir('generated/www-assets')
+    }
+}
+
+// The web app at the repository root is the single source of truth:
+// copy it into the APK's assets on every build.
+def copyWebAssets = tasks.register('copyWebAssets', Copy) {
+    from(rootProject.file('..')) {
+        include 'index.html', 'css/**', 'js/**'
+    }
+    into layout.buildDirectory.dir('generated/www-assets/www')
+}
+tasks.named('preBuild') { dependsOn copyWebAssets }

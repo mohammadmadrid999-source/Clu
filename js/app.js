@@ -124,6 +124,7 @@
     slider(p, 'مجال الرؤية FOV', 60, 120, 1, () => game.fov, upd('fov'), (v) => Math.round(v));
     slider(p, 'تكبير ADS', 1, 4, 0.1, () => game.adsZoom, upd('adsZoom'), (v) => (+v).toFixed(1) + '×');
     slider(p, 'معامل الدوران أثناء ADS', 0.2, 1, 0.05, () => game.adsTurnScale, upd('adsTurnScale'));
+    slider(p, 'حساسية اللمس (وضع الهاتف)', 1, 12, 0.5, () => game.touchGain, upd('touchGain'), (v) => (+v).toFixed(1));
     checkbox(p, 'تفعيل مساعدة التصويب (Aim Assist)', () => game.aimAssist, upd('aimAssist'));
     slider(p, 'نطاق مساعدة التصويب °', 1, 12, 0.5, () => game.assistRadius, upd('assistRadius'), (v) => (+v).toFixed(1));
     slider(p, 'إبطاء المساعدة', 0.2, 1, 0.05, () => game.assistSlowdown, upd('assistSlowdown'));
@@ -272,7 +273,7 @@
       c.beginPath(); c.arc(px, py, 5, 0, Math.PI * 2); c.fill();
     }
     // live speed marker
-    if (input.locked && config[out.ads ? 'ads' : 'hip'] === curveMode()) {
+    if ((input.locked || input.touch) && config[out.ads ? 'ads' : 'hip'] === curveMode()) {
       const s = Math.min(out.speed, 1);
       const [px, py] = toPx([s, X.evalCurve(pts, s)]);
       c.strokeStyle = '#4ade80';
@@ -336,9 +337,11 @@
   // ---------- input capture ----------
   const arena = $('arena');
   const overlay = $('arenaOverlay');
+  const coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
   overlay.addEventListener('click', () => {
-    const p = arena.requestPointerLock && arena.requestPointerLock();
-    if (p && p.catch) p.catch(() => {});
+    if (coarsePointer || !arena.requestPointerLock) { enterTouch(); return; }
+    const p = arena.requestPointerLock();
+    if (p && p.catch) p.catch(enterTouch);
   });
   document.addEventListener('pointerlockchange', () => {
     input.locked = document.pointerLockElement === arena;
@@ -346,8 +349,7 @@
     input.keys.clear();
     input.dx = input.dy = 0;
     translator.reset();
-    $('lockBadge').textContent = input.locked ? 'الماوس ملتقط' : 'الماوس غير ملتقط';
-    $('lockBadge').classList.toggle('off', !input.locked);
+    setActiveBadge();
   });
   document.addEventListener('mousemove', (e) => {
     if (!input.locked) return;
@@ -368,7 +370,7 @@
       finishBinding(e.code);
       return;
     }
-    if (!input.locked) return;
+    if (!input.locked && !input.touch) return;
     e.preventDefault();
     press(e.code);
   });
@@ -385,6 +387,102 @@
     ui.suppressMenu = false;
   });
   window.addEventListener('blur', () => input.keys.clear());
+
+  // ---------- touch mode (phones / Android) ----------
+  // Dragging on the arena acts as the mouse, a virtual joystick is the left
+  // stick, and on-screen buttons drive RT / LT / A.
+  input.touch = false;
+  input.touchLS = [0, 0];
+  input.touchButtons = new Set();
+  input.touchTaps = new Set(); // presses since the last frame, so quick taps are never missed
+
+  function setActiveBadge() {
+    const on = input.locked || input.touch;
+    $('lockBadge').textContent = input.touch ? 'وضع اللمس' : input.locked ? 'الماوس ملتقط' : 'الماوس غير ملتقط';
+    $('lockBadge').classList.toggle('off', !on);
+  }
+  function enterTouch() {
+    input.touch = true;
+    document.body.classList.add('touch-mode');
+    overlay.classList.add('hidden');
+    $('touchLayer').classList.remove('hidden');
+    translator.reset();
+    setActiveBadge();
+    resizeArena();
+  }
+  function exitTouch() {
+    input.touch = false;
+    input.touchLS = [0, 0];
+    input.touchButtons.clear();
+    document.body.classList.remove('touch-mode');
+    overlay.classList.remove('hidden');
+    $('touchLayer').classList.add('hidden');
+    setActiveBadge();
+    resizeArena();
+  }
+  $('tExit').addEventListener('click', exitTouch);
+  // Called by the Android wrapper's back button.
+  window.XimApp = { back() { if (!input.touch) return false; exitTouch(); return true; } };
+
+  const look = { id: null, x: 0, y: 0 };
+  const lookPad = $('lookPad');
+  lookPad.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY;
+    lookPad.setPointerCapture(e.pointerId);
+  });
+  lookPad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== look.id) return;
+    input.dx += (e.clientX - look.x) * game.touchGain;
+    input.dy += (e.clientY - look.y) * game.touchGain;
+    look.x = e.clientX; look.y = e.clientY;
+  });
+  const endLook = (e) => { if (e.pointerId === look.id) look.id = null; };
+  lookPad.addEventListener('pointerup', endLook);
+  lookPad.addEventListener('pointercancel', endLook);
+
+  const joy = $('joy'), knob = joy.querySelector('.knob');
+  let joyId = null;
+  function moveJoy(e) {
+    const r = joy.getBoundingClientRect();
+    const rad = r.width / 2;
+    let x = (e.clientX - (r.left + rad)) / rad;
+    let y = (e.clientY - (r.top + rad)) / rad;
+    const m = Math.hypot(x, y);
+    if (m > 1) { x /= m; y /= m; }
+    input.touchLS = [x, y];
+    knob.style.transform = `translate(${x * rad * 0.6}px, ${y * rad * 0.6}px)`;
+  }
+  joy.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    joyId = e.pointerId;
+    joy.setPointerCapture(e.pointerId);
+    moveJoy(e);
+  });
+  joy.addEventListener('pointermove', (e) => { if (e.pointerId === joyId) moveJoy(e); });
+  const endJoy = (e) => {
+    if (e.pointerId !== joyId) return;
+    joyId = null;
+    input.touchLS = [0, 0];
+    knob.style.transform = '';
+  };
+  joy.addEventListener('pointerup', endJoy);
+  joy.addEventListener('pointercancel', endJoy);
+
+  for (const b of document.querySelectorAll('#touchLayer [data-btn]')) {
+    const id = b.dataset.btn;
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      b.setPointerCapture(e.pointerId);
+      if (id === 'LT' && config.adsMode === 'toggle') input.adsToggled = !input.adsToggled;
+      input.touchButtons.add(id);
+      input.touchTaps.add(id);
+      b.classList.add('on');
+    });
+    const up = () => { input.touchButtons.delete(id); b.classList.remove('on'); };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+  }
 
   // ---------- gamepad passthrough ----------
   const PAD_MAP = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'BACK', 'START', 'L3', 'R3', 'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT'];
@@ -502,13 +600,14 @@
     }
 
     // Crosshair.
-    const g = out.ads ? 4 : 10;
-    c.strokeStyle = sim.muzzle > 0 ? '#ffd166' : '#e6ebf3'; c.lineWidth = 2;
+    const dpr = window.devicePixelRatio || 1;
+    const g = (out.ads ? 4 : 10) * dpr, len = 10 * dpr;
+    c.strokeStyle = sim.muzzle > 0 ? '#ffd166' : '#e6ebf3'; c.lineWidth = 2 * dpr;
     c.beginPath();
-    c.moveTo(cx - g - 10, cy); c.lineTo(cx - g, cy);
-    c.moveTo(cx + g, cy); c.lineTo(cx + g + 10, cy);
-    c.moveTo(cx, cy - g - 10); c.lineTo(cx, cy - g);
-    c.moveTo(cx, cy + g); c.lineTo(cx, cy + g + 10);
+    c.moveTo(cx - g - len, cy); c.lineTo(cx - g, cy);
+    c.moveTo(cx + g, cy); c.lineTo(cx + g + len, cy);
+    c.moveTo(cx, cy - g - len); c.lineTo(cx, cy - g);
+    c.moveTo(cx, cy + g); c.lineTo(cx, cy + g + len);
     c.stroke(); c.lineWidth = 1;
 
     if (out.ads) {
@@ -581,6 +680,9 @@
 
     out.buttons = {};
     for (const id of Object.keys(b)) if (!id.startsWith('LS_')) out.buttons[id] = held(id);
+    for (const id of input.touchButtons) out.buttons[id] = true;
+    for (const id of input.touchTaps) out.buttons[id] = true;
+    input.touchTaps.clear();
     if (gp) PAD_MAP.forEach((id, i) => { if (gp.buttons[i] && gp.buttons[i].pressed) out.buttons[id] = true; });
 
     out.ads = config.adsMode === 'toggle' ? input.adsToggled : !!out.buttons.LT;
@@ -593,6 +695,7 @@
     out.speed = r.speed;
     out.mult = r.mult;
     out.ls = X.digitalToStick(held('LS_UP'), held('LS_DOWN'), held('LS_LEFT'), held('LS_RIGHT'));
+    if (input.touchLS[0] || input.touchLS[1]) out.ls = input.touchLS.slice();
 
     // Physical controller passthrough when it is being used.
     if (gp) {
