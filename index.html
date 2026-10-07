@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>محاكي XIM Matrix</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">X</span> محاكي <b>XIM Matrix</b></div>
+    <div class="status">
+      <span id="modeBadge" class="badge">HIP</span>
+      <span id="lockBadge" class="badge off">الماوس غير ملتقط</span>
+      <span id="padBadge" class="badge off">لا توجد يد تحكم</span>
+      <span id="fpsBadge" class="badge">0 Hz</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="arena-wrap">
+      <canvas id="arena"></canvas>
+      <div id="arenaOverlay" class="overlay">
+        <h2>ميدان التصويب</h2>
+        <p>اضغط هنا لالتقاط الماوس. حرّك الماوس ليتحوّل إلى عصا تحكم يمنى كما يفعل XIM.</p>
+        <p class="hint">زر الماوس الأيسر = RT (إطلاق) · الأيمن = LT (تصويب ADS) · WASD = العصا اليسرى · Esc للخروج</p>
+      </div>
+      <div class="hud">
+        <span>الإصابات: <b id="hits">0</b></span>
+        <span>الطلقات: <b id="shots">0</b></span>
+        <span>الدقة: <b id="acc">0%</b></span>
+        <button id="resetScore" class="small">تصفير</button>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs" id="tabs">
+        <button data-tab="config" class="active">الإعدادات</button>
+        <button data-tab="curve">الباليستيك</button>
+        <button data-tab="bindings">الأزرار</button>
+        <button data-tab="game">اللعبة</button>
+        <button data-tab="profiles">الملفات</button>
+      </nav>
+
+      <div class="tab active" id="tab-config">
+        <div class="seg" id="modeSeg">
+          <button data-mode="hip" class="active">Hip Fire</button>
+          <button data-mode="ads">ADS (تصويب)</button>
+        </div>
+        <div id="modeFields"></div>
+        <label class="row">طريقة ADS
+          <select id="adsMode"><option value="hold">ضغط مستمر</option><option value="toggle">تبديل</option></select>
+        </label>
+        <label class="row check"><input type="checkbox" id="invertY"> عكس المحور العمودي</label>
+      </div>
+
+      <div class="tab" id="tab-curve">
+        <p class="muted">منحنى الباليستيك الذكي: المحور الأفقي = سرعة الماوس، العمودي = مضاعف الحساسية. اسحب النقاط، انقر مرتين لإضافة نقطة، وانقر بالزر الأيمن لحذفها.</p>
+        <div class="seg" id="curveSeg">
+          <button data-mode="hip" class="active">Hip</button>
+          <button data-mode="ads">ADS</button>
+        </div>
+        <canvas id="curveCanvas" width="360" height="240"></canvas>
+        <div class="btns">
+          <button id="curveLinear">خطي</button>
+          <button id="curveAccel">تسارع</button>
+          <button id="curveDecel">تباطؤ</button>
+        </div>
+      </div>
+
+      <div class="tab" id="tab-bindings">
+        <p class="muted">انقر على أي زر ثم اضغط مفتاحاً أو زر ماوس لإعادة تعيينه.</p>
+        <div id="bindList" class="bind-list"></div>
+        <button id="bindReset">استعادة الافتراضي</button>
+      </div>
+
+      <div class="tab" id="tab-game">
+        <p class="muted">محاكاة سلوك اللعبة على الجهاز (المنطقة الميتة، منحنى الاستجابة، مساعدة التصويب).</p>
+        <div id="gameFields"></div>
+      </div>
+
+      <div class="tab" id="tab-profiles">
+        <label class="row">الملف الحالي <input id="cfgName" type="text"></label>
+        <div class="btns">
+          <button id="cfgSave">حفظ</button>
+          <button id="cfgExport">تصدير JSON</button>
+          <label class="file-btn">استيراد<input id="cfgImport" type="file" accept="application/json"></label>
+        </div>
+        <h4>الملفات المحفوظة</h4>
+        <ul id="cfgList" class="cfg-list"></ul>
+        <h4>إعدادات جاهزة</h4>
+        <div id="presetList" class="btns"></div>
+      </div>
+    </aside>
+
+    <section class="bottom">
+      <div class="card">
+        <h3>يد التحكم الافتراضية</h3>
+        <div id="pad"></div>
+      </div>
+      <div class="card">
+        <h3>أثر العصا اليمنى</h3>
+        <canvas id="trace" width="220" height="220"></canvas>
+        <div class="readout">
+          <span>X: <b id="rx">0.00</b></span>
+          <span>Y: <b id="ry">0.00</b></span>
+          <span>×: <b id="mult">1.00</b></span>
+        </div>
+      </div>
+      <div class="card grow">
+        <h3>مخرجات الترجمة عبر الزمن</h3>
+        <canvas id="graph" width="520" height="200"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/core.js"></script>
+  <script src="js/controller.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
