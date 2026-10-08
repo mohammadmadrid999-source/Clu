@@ -49,6 +49,12 @@ data class PointerSnapshot(val key: Int, val x: Int, val y: Int, val down: Boole
  *     cancels queued events first, turning a tap's ACTION_UP into ACTION_CANCEL (games ignore it).
  *  6. A cancelled gesture (real touch, rejected continuation) invalidates every stroke in its
  *     generation; pointers that still want to be down re-press after a short backoff.
+ *  7. Never send a gesture in which nothing moves, starts or lifts. It produces no MotionEvents,
+ *     and the injector reports such a gesture as *failed* (`events.isEmpty()` → failure, in every
+ *     release from Android 9 to 16) even though it accepted the continuation. Treating that as a
+ *     cancel caused a DOWN → MOVE → "failed" → CANCEL → DOWN loop whenever the stick held still
+ *     (measured on a POCO X7 Pro: 104 CANCELs for 114 DOWNs). A finger held still simply sends
+ *     nothing; the injector keeps the stroke open until the next continuation.
  *
  * Not thread-safe: confine to the injection thread.
  */
@@ -180,6 +186,8 @@ class TouchPlanner(
             val y = cy(p.pressY)
             segments += PointerSegment(p.key, x, y, x, y, isNewStroke = true, willContinue = true, startDelayMs = newStrokeDelay)
         }
+        // Rule 7: an all-stationary continuation generates no events and is reported as failed.
+        if (segments.none { it.isNewStroke || !it.willContinue || it.fromX != it.toX || it.fromY != it.toY }) return null
 
         for (s in segments) {
             val p = pointers.getValue(s.key)

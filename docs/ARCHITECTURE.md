@@ -237,6 +237,14 @@ These are checked against `MotionEventInjector` / `GestureDescription` in AOSP (
    DOWN after 300 ms, long enough for a tap to finish, since re-pressing during it would cancel the
    person's own touch. A touch on Clu's HUD is a different window and no longer breaks the drag on
    Android 16.
+8. **Never send a gesture in which nothing moves, starts or lifts.** A continuation whose strokes
+   all stay on the same pixel produces no MotionEvents, and `MotionEventInjector` then reports the
+   gesture as *failed* (`events.isEmpty()` → `notifyService(false)`, unchanged from Android 9 to
+   16), even though it accepted the continuation. Build 4 treated that as a cancel. Whenever the
+   stick held still, it lifted and re-pressed: the first POCO X7 Pro report showed 104 CANCELs for
+   114 DOWNs. A slow camera drag hit the same trap, because a sub-pixel step rounds to "no move".
+   The planner now sends nothing while every finger is still. The injector keeps the stroke open,
+   and the next real move continues it from the exact pixel where it stopped.
 
 ### Joystick behaviour (`JoystickDriver`)
 

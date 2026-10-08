@@ -68,16 +68,53 @@ class TouchPlannerTest {
         assertTrue(down.isNewStroke && down.willContinue)
         p.onCompleted(0)
         var t = 116L
-        var up: PointerSegment? = null
-        while (up == null) {
-            val seg = p.nextPlan(t)!!.segments.single()
-            if (!seg.willContinue) up = seg
-            p.onCompleted(0)
+        var upAt = -1L
+        while (upAt < 0 && t < 1000) {
+            // While the finger is held still there is nothing to send (rule 7).
+            val plan = p.nextPlan(t)
+            if (plan != null) {
+                val seg = plan.segments.single()
+                assertFalse("only the lift may be sent", seg.willContinue)
+                upAt = t
+                p.onCompleted(0)
+            }
             t += 16
         }
-        assertTrue("lifted after ${t - 100} ms", t - 16 >= 170)
+        assertTrue("lifted after ${upAt - 100} ms", upAt >= 170)
         assertFalse(p.has(101))
         assertTrue(p.isIdle)
+    }
+
+    @Test
+    fun aFingerHeldStillSendsNothingBecauseTheInjectorWouldReportFailure() {
+        val p = planner()
+        p.press(0, 400, 800, targetX = 450, targetY = 800, now = 0)
+        p.nextPlan(0)
+        p.onCompleted(0)
+        assertEquals(450, p.nextPlan(16)!!.segments.single().toX) // moves to the deflected target
+        p.onCompleted(0)
+        // Stick held at the same deflection (or at full tilt): no gesture at all, pointer stays down.
+        for (t in 32L..400L step 16) assertNull(p.nextPlan(t))
+        assertTrue(p.has(0))
+        assertEquals(0, p.generation)
+        // Moving again continues the same stroke, from exactly where it stopped.
+        p.moveTo(0, 470, 800)
+        val seg = p.nextPlan(416)!!.segments.single()
+        assertFalse(seg.isNewStroke)
+        assertEquals(450 to 470, seg.fromX to seg.toX)
+    }
+
+    @Test
+    fun aStillFingerRidesAlongWhenAnotherPointerMoves() {
+        val p = planner()
+        p.press(0, 400, 800, now = 0)
+        p.press(101, 2000, 900, now = 0)
+        p.nextPlan(0)
+        p.onCompleted(0)
+        p.moveTo(0, 420, 800)
+        val plan = p.nextPlan(16)!!
+        // Rule 2: the still button must still be continued so the injector accepts the gesture.
+        assertEquals(setOf(0, 101), plan.segments.map { it.key }.toSet())
     }
 
     @Test
