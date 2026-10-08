@@ -153,6 +153,8 @@ class LayoutEditorView(
     private val joystickName: String,
     private val aimName: String,
     private val onSelectionChanged: () -> Unit,
+    /** A target started (true) or stopped (false) being dragged with a finger. */
+    private val onDragChanged: (Boolean) -> Unit = {},
 ) : View(context) {
 
     private val painter = TargetPainter(context)
@@ -189,6 +191,7 @@ class LayoutEditorView(
                 if (hit < 0) return false
                 select(hit)
                 dragging = true
+                onDragChanged(true)
                 return true
             }
             MotionEvent.ACTION_MOVE -> if (dragging) {
@@ -196,7 +199,10 @@ class LayoutEditorView(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                dragging = false
+                if (dragging) {
+                    dragging = false
+                    onDragChanged(false)
+                }
                 return true
             }
         }
@@ -237,6 +243,20 @@ class LayoutEditorView(
     }
 
     fun selectedButton(): VirtualButton? = buttons.getOrNull(selected - firstButton)
+
+    /** The selected target's area on screen, in display pixels. */
+    fun selectedBounds(): IntRect {
+        val minDim = min(displayW, displayH)
+        val (fx, fy) = selectedPosition()
+        val r = when {
+            selected == 0 -> (joystick.radiusFraction * minDim).toFloat()
+            aimSelected -> (aim.padRadiusFraction * minDim).toFloat()
+            else -> painter.buttonRadius
+        }
+        val cx = (fx * displayW).toFloat()
+        val cy = (fy * displayH).toFloat()
+        return IntRect((cx - r).toInt(), (cy - r).toInt(), (cx + r).toInt(), (cy + r).toInt())
+    }
 
     private fun select(index: Int) {
         selected = index

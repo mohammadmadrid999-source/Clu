@@ -322,11 +322,33 @@ service's own `WindowManager`:
   disabled.
 - **Trusted overlay.** Android 12+ blocks touches that pass through untrusted
   (`SYSTEM_ALERT_WINDOW`) overlays above 0.8 opacity; accessibility overlays are exempt.
-- **HUD panel.** Tilt indicator, status line (live region), and
-  Pause/Recenter/Profile/Layout/Learn/Move/Stop/Hide. It collapses to a bubble, and "Move panel"
-  cycles through 8 anchors with one tap (no dragging needed). `FLAG_NOT_FOCUSABLE`, so it never
-  steals key input from the game. It warns if it covers a configured stick or button, since
-  injected touches would land on the panel instead of the game.
+- **HUD panel** (`HudPanel`). The tilt indicator, a status line (live region) and
+  Pause/Recenter/Layout/More; "More" adds Profile/Learn moves/Move panel/Stop/Hide. It is
+  `FLAG_NOT_FOCUSABLE`, so it never steals key input from the game, and it warns if it covers a
+  configured stick or button, since injected touches would land on the panel instead of the game.
+- **Small over the game.** The first device test (POCO X7 Pro, 834×375 dp in landscape) found
+  the old panel 304 dp tall and the layout editor's bar about 240 dp, both covering most of the
+  game, and neither could be dragged. Measured now with Robolectric at that exact screen and
+  density (`OverlaySizeTest`, real text metrics):
+  - expanded panel: 312×80 dp (21 % of the height);
+  - during play, a 68 dp bubble (18 %);
+  - editor bar: one 81 dp strip (21 %), which shrinks to two buttons (112×60 dp).
+
+  Rows are `FlowRow`s, so in portrait they wrap instead of overflowing.
+- **Shrinks while playing.** When play starts (calibration finished) the panel becomes the
+  bubble. Calibration and learning prompts and notices appear beside it without the buttons. Tap
+  the bubble to expand it; pausing restores the person's own expanded/collapsed choice.
+- **Movable three ways.** Drag the panel by its indicator (a tap still expands or collapses it),
+  and the editor bar by its ⠿ handle. Or use one tap ("Move panel", or tapping ⠿) to jump to the
+  next of eight screen edges. Or use accessibility actions ("Move panel left/right/up/down"),
+  which TalkBack, Switch Access and Voice Access list. Positions are stored as a fraction of
+  the free space (`PanelPlacement`), so a panel keeps hugging its edge when it grows or the screen
+  rotates, and is always clamped on screen. The HUD window uses absolute screen coordinates
+  (`LAYOUT_IN_SCREEN | LAYOUT_NO_LIMITS`, like the full-screen windows), so its `x`/`y` are exactly
+  where it is drawn.
+- **The editor bar keeps out of the way.** It fades while a target is dragged, and if it ends
+  up covering the selected target (after a drag or "Next"), it moves to the other half of the
+  screen.
 - **Touch visualizer** (optional). Full-screen, `FLAG_NOT_TOUCHABLE`, shows targets and the
   virtual fingers.
 - **Layout editor.** Full-screen while play is paused. Drag targets onto the game's own
@@ -445,7 +467,7 @@ and no screen content.
 
 ## 9. Testing, verification status and limitations
 
-**Automated (JVM, `./gradlew test`, 119 tests).** Quaternion math and control axes across all
+**Automated (JVM, `./gradlew test`, 139 tests; overlay sizes and wrapping under Robolectric).** Quaternion math and control axes across all
 four display rotations; filters (tremor attenuation, step response, diagonal integrity, spasm
 gate); response curves (monotonic, endpoints, continuity at the deadzone, asymmetric ranges,
 digital and snapping); dwell (timing, hysteresis, tremor grace, diagonals); flick (direction,
@@ -458,7 +480,7 @@ touch-down, release, camera re-grip with no lost motion); gyro aim (slow motion 
 tremor suppressed, per-side ranges, precision, acceleration, no overshoot from smoothing, spasms
 ignored end to end) and the aim pad (sub-pixel accumulation without re-pressing, re-grip without
 lost motion, edge turn, idle release, no tap loop at the screen edge, move/aim switch); a still
-finger sends nothing (rule 8); real-touch recovery (Android 16); service-health states; the
+finger sends nothing (rule 8); overlay panel and editor-bar sizes at the POCO X7 Pro's landscape and portrait screens, row wrapping and right-to-left mirroring, panel placement (edge hugging, rotation, drag clamping, edge cycling, moving the bar off a covered target); real-touch recovery (Android 16); service-health states; the
 accessibility-service XML (`isAccessibilityTool`, no window content); injection statistics and
 the synthetic self-test; the foreground-app gate; profile JSON compatibility; and
 end-to-end pipeline scenarios (tilt to stick, lying-down neutral, resting tremor stays neutral,

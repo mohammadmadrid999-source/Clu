@@ -66,6 +66,8 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = false
+        // Robolectric layout tests (overlay sizes) need the app's resources.
+        unitTests.isIncludeAndroidResources = true
     }
 
     lint {
@@ -90,4 +92,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

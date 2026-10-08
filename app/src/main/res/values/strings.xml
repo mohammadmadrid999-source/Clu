@@ -28,6 +28,14 @@
     <string name="hud_move">Move panel</string>
     <string name="hud_stop">Stop</string>
     <string name="hud_hide">Hide</string>
+    <string name="hud_more">More</string>
+    <string name="hud_less">Less</string>
+    <string name="hud_move_left">Move panel left</string>
+    <string name="hud_move_right">Move panel right</string>
+    <string name="hud_move_up">Move panel up</string>
+    <string name="hud_move_down">Move panel down</string>
+    <string name="state_expanded">expanded</string>
+    <string name="state_collapsed">collapsed</string>
 
     <string name="status_stopped">Stopped. Tap Start to play.</string>
     <string name="status_paused">Paused. Hold any direction or tap Resume.</string>
@@ -80,9 +88,17 @@
     <string name="editor_smaller">Size −</string>
     <string name="editor_bigger">Size +</string>
     <string name="editor_toggle">On/off</string>
-    <string name="editor_link">Link game</string>
-    <string name="editor_unlink">Unlink game</string>
-    <string name="editor_bar">Move bar</string>
+    <string name="editor_link">Link</string>
+    <string name="editor_unlink">Unlink</string>
+    <string name="editor_link_description">Link this game: the profile is chosen whenever it opens</string>
+    <string name="editor_unlink_description">Unlink this game from the profile</string>
+    <string name="editor_handle">Move this bar: drag it, or tap to jump to the next screen edge</string>
+    <string name="editor_minimize">Shrink the editor bar</string>
+    <string name="editor_restore">Show the editor bar</string>
+    <string name="editor_bar_left">Move bar left</string>
+    <string name="editor_bar_right">Move bar right</string>
+    <string name="editor_bar_up">Move bar up</string>
+    <string name="editor_bar_down">Move bar down</string>
     <string name="editor_cancel">Cancel</string>
     <string name="editor_save">Save</string>
     <string name="editor_on">on</string>

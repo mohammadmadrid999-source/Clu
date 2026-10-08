@@ -102,6 +102,16 @@ What good looks like in the report:
 Then try a real game: Setup › **Start**, hold still about 2 s, open the game, tap **Layout** on
 the Clu panel, drag the stick and buttons onto the game's controls, **Save**, and play.
 
+**The Clu panel and the Layout bar:**
+
+- While you play, the panel shrinks to a small round bubble (the tilt indicator). Tap it to get
+  the buttons (Pause, Recenter, Layout, More). Pausing brings them back on their own.
+- **Drag the bubble** to put it anywhere, for example a corner the game doesn't use. **More ›
+  Move panel** jumps it to the next screen edge if dragging is hard.
+- In Layout, the bar of buttons can be **dragged by ⠿** (or tap ⠿ to jump to the next edge), and
+  **▾ shrinks it** to two buttons so you see the whole game. While you drag a control the bar
+  fades, and it moves out of the way if it ends up on top of the control you picked.
+
 ## 5. Aiming in shooters
 
 Use **Aiming (gyro aim)**. The aim moves only while you move, by as much as you move, and stops
