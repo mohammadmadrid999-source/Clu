@@ -214,4 +214,21 @@
     <string name="fmt_percent">%1$d%%</string>
     <string name="fmt_px_per_s">%1$.0f px/s</string>
     <string name="off">Off</string>
+
+    <!-- Injection self-test -->
+    <string name="section_device_check">Check this phone</string>
+    <string name="device_check_hint">Opens a test pad that stands in for a game. \"Synthetic test\" moves a virtual stick in circles and taps button A every 1.2 seconds, without using the motion sensors, to show whether this phone accepts Clu\'s touches. Share the report if something looks wrong.</string>
+    <string name="action_device_test">Injection test</string>
+    <string name="action_share_report">Share device report</string>
+    <string name="test_report_title">Clu device report</string>
+    <string name="test_run">Synthetic test</string>
+    <string name="test_stop">Stop test</string>
+    <string name="test_reset">Reset</string>
+    <string name="test_copy">Copy report</string>
+    <string name="test_share">Share</string>
+    <string name="test_close">Close</string>
+    <string name="test_copied">Report copied</string>
+    <string name="test_need_service">Turn on \"Clu motion controls\" in Accessibility settings first.</string>
+    <string name="test_intro">Tap Synthetic test, or start a session and tilt. Green = finger down, white = up, red X = cancelled.</string>
+    <string name="test_summary">Sent %1$d, done %2$d, failed %3$d · down %4$d, up %5$d, cancel %6$d · moves %7$d, gap p95 %8$d ms · latency p50 %9$d ms · fingers %10$d</string>
 </resources>

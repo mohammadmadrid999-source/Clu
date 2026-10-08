@@ -54,6 +54,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Stand-in "game" for the on-device injection self-test; landscape like most games. -->
+        <activity
+            android:name=".ui.InjectionTestActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:label="@string/test_report_title" />
+
         <service
             android:name=".input.InputDispatcherService"
             android:exported="true"

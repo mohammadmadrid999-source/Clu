@@ -16,7 +16,7 @@ import kotlin.math.hypot
 import kotlin.math.min
 
 /** Shared geometry/paint for drawing touch targets in display coordinates. */
-private class TargetPainter(context: Context) {
+internal class TargetPainter(context: Context) {
     val density = context.resources.displayMetrics.density
     val buttonRadius = 26 * density
     val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {

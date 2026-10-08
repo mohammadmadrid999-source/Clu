@@ -166,6 +166,19 @@ class MainActivity : ComponentActivity() {
         buttonRow(button(R.string.action_battery_settings) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) })
         sensorStatus = body("")
 
+        subheading(R.string.section_device_check)
+        body(getString(R.string.device_check_hint))
+        buttonRow(
+            button(R.string.action_device_test) { startActivity(Intent(this, InjectionTestActivity::class.java)) },
+            button(R.string.action_share_report) {
+                val send = Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_SUBJECT, getString(R.string.test_report_title))
+                    .putExtra(Intent.EXTRA_TEXT, DeviceReport.build(this, engine))
+                startActivity(Intent.createChooser(send, getString(R.string.action_share_report)))
+            },
+        )
+
         heading(R.string.section_session)
         preview = TiltIndicatorView(this)
         content.addView(preview, LinearLayout.LayoutParams(dp(160), dp(160)).apply { gravity = Gravity.CENTER_HORIZONTAL })

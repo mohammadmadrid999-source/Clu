@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat
 import com.clu.motion.R
 import com.clu.motion.core.PipelineEvent
 import com.clu.motion.core.TriggerPhase
+import com.clu.motion.core.diag.InjectionStats
+import com.clu.motion.core.diag.SelfTest
 import com.clu.motion.core.safety.PauseReason
 import com.clu.motion.core.safety.SafetyEvent
 import com.clu.motion.input.InputDispatcherService
@@ -107,6 +109,14 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
 
     @Volatile
     private var keyLearner: ((Int) -> Unit)? = null
+
+    /** Shared recorder for the on-device injection test (disabled unless that screen is open). */
+    val injectionStats = InjectionStats()
+
+    private val _selfTest = MutableStateFlow<SelfTest?>(null)
+
+    /** Non-null while the synthetic injection test drives the virtual stick instead of sensors. */
+    val selfTest: StateFlow<SelfTest?> = _selfTest.asStateFlow()
 
     private val acoustic = AcousticClickTrigger(app) { onTrigger(TriggerKind.SOUND_CLICK, 0, TriggerPhase.PULSE) }
     private var screenReceiverRegistered = false
@@ -225,6 +235,18 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
         if (_session.value == SessionState.Stopped) startSession()
         stickLocked = true
         processor.learnAxes()
+    }
+
+    /** Starts synthetic stick + tap injection (no sensors needed). Requires the accessibility service. */
+    fun startSelfTest(nowMs: Long) {
+        injectionStats.reset()
+        _selfTest.value = SelfTest(startedAtMs = nowMs)
+    }
+
+    fun stopSelfTest() {
+        if (_selfTest.value == null) return
+        _selfTest.value = null
+        commands.trySend(TouchCommand.ReleaseAll)
     }
 
     // ---- Profiles ----------------------------------------------------------------------------

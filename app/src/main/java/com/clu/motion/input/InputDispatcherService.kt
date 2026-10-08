@@ -28,6 +28,7 @@ import com.clu.motion.engine.SessionState
 import com.clu.motion.engine.TouchCommand
 import com.clu.motion.overlay.OverlayController
 import com.clu.motion.profile.ControlProfile
+import com.clu.motion.ui.InjectionTestActivity
 import com.clu.motion.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +69,7 @@ class InputDispatcherService : AccessibilityService() {
     private var streamer: GestureStreamer? = null
     private var ticking = false
     private var lastSnapshot: List<PointerSnapshot> = emptyList()
+    private var lastSelfTestTap = 0L
 
     @Volatile
     private var displayWidth = 1
@@ -97,14 +99,19 @@ class InputDispatcherService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         engine = CluApp.engine(this)
-        gate = ForegroundAppGate(packageName, setOf(MainActivity::class.java.name), homePackages())
+        gate = ForegroundAppGate(
+            ownPackage = packageName,
+            ownBlockedActivities = setOf(MainActivity::class.java.name),
+            ownInjectableActivities = setOf(InjectionTestActivity::class.java.name),
+            homePackages = homePackages(),
+        )
         updateDisplayMetrics()
 
         val thread = HandlerThread("clu-inject", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
         val handler = Handler(thread.looper)
         injectThread = thread
         injectHandler = handler
-        streamer = GestureStreamer(this, handler, planner)
+        streamer = GestureStreamer(this, handler, planner, engine.injectionStats)
 
         overlay = OverlayController(this, engine, touches) { gate.currentPackage }.also { it.attach() }
 
@@ -113,6 +120,11 @@ class InputDispatcherService : AccessibilityService() {
         scope.launch {
             engine.session.collect { state ->
                 if (state != SessionState.Stopped) handler.post { startTicking() }
+            }
+        }
+        scope.launch {
+            engine.selfTest.collect { test ->
+                if (test != null) handler.post { startTicking() }
             }
         }
         _connected.value = true
@@ -184,10 +196,15 @@ class InputDispatcherService : AccessibilityService() {
         planner.maxInFlight = profile.joystick.maxInFlight
         joystick.config = profile.joystick
 
-        val live = session == SessionState.Active &&
-            gate.injectionAllowed &&
-            frame.phase == PipelinePhase.RUNNING &&
-            now - frame.uptimeMs < STALE_FRAME_MS
+        val selfTest = engine.selfTest.value
+        val live = if (selfTest != null) {
+            gate.injectionAllowed // synthetic input: no session, calibration or sensors involved
+        } else {
+            session == SessionState.Active &&
+                gate.injectionAllowed &&
+                frame.phase == PipelinePhase.RUNNING &&
+                now - frame.uptimeMs < STALE_FRAME_MS
+        }
 
         while (true) {
             val command = engine.touchCommands.tryReceive().getOrNull() ?: break
@@ -195,13 +212,21 @@ class InputDispatcherService : AccessibilityService() {
         }
         if (!live) planner.releaseAll()
 
-        var stick = if (live) StickOutput(frame.stickX.toDouble(), frame.stickY.toDouble()) else StickOutput.ZERO
-        if (engine.stickLocked) {
-            if (live && stick.isNeutral) engine.stickLocked = false
-            stick = StickOutput.ZERO
+        var stick: StickOutput
+        if (selfTest != null) {
+            stick = if (live) selfTest.stick(now) else StickOutput.ZERO
+            val tap = selfTest.tapIndex(now)
+            if (live && tap > 0 && tap != lastSelfTestTap) handle(TouchCommand.Tap(selfTest.tapButtonId), profile, true, now)
+            lastSelfTestTap = tap
+        } else {
+            stick = if (live) StickOutput(frame.stickX.toDouble(), frame.stickY.toDouble()) else StickOutput.ZERO
+            if (engine.stickLocked) {
+                if (live && stick.isNeutral) engine.stickLocked = false
+                stick = StickOutput.ZERO
+            }
         }
         joystick.update(stick, live, now, w, h, planner)
-        streamer?.pump(now)
+        streamer?.pump(now, frameAgeMs = if (selfTest == null && live) now - frame.uptimeMs else null)
 
         if (publishTouches) {
             val snapshot = planner.snapshot()
@@ -212,7 +237,7 @@ class InputDispatcherService : AccessibilityService() {
         }
 
         return when {
-            session == SessionState.Stopped && planner.isIdle -> 0
+            session == SessionState.Stopped && selfTest == null && planner.isIdle -> 0
             live || !planner.isIdle -> profile.joystick.segmentMs.coerceIn(MIN_TICK_MS, MAX_TICK_MS)
             else -> IDLE_TICK_MS
         }

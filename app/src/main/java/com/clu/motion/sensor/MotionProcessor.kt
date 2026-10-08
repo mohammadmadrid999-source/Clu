@@ -30,7 +30,12 @@ enum class OrientationSource(val sensorType: Int, val tiltOnly: Boolean) {
     ACCELEROMETER(Sensor.TYPE_ACCELEROMETER, true),
 }
 
-data class SensorStatus(val source: OrientationSource?, val reliable: Boolean)
+data class SensorStatus(
+    val source: OrientationSource?,
+    val reliable: Boolean,
+    /** Measured orientation sample rate over the last second (0 until known). */
+    val sampleRateHz: Double = 0.0,
+)
 
 /**
  * Sensor front-end for [MotionPipeline].
@@ -111,6 +116,8 @@ class MotionProcessor(
             private set
         private val gravity = DoubleArray(3)
         private var gravityInitialized = false
+        private var rateWindowStartNs = 0L
+        private var rateWindowCount = 0
 
         init {
             handler.post {
@@ -217,7 +224,20 @@ class MotionProcessor(
         }
 
         private fun publish(frame: MotionFrame) {
-            if (session === this) _frames.value = frame
+            if (session !== this) return
+            _frames.value = frame
+            measureRate(frame.sensorTimeNanos)
+        }
+
+        private fun measureRate(tNanos: Long) {
+            if (rateWindowCount == 0) rateWindowStartNs = tNanos
+            rateWindowCount++
+            val elapsed = tNanos - rateWindowStartNs
+            if (elapsed >= 1_000_000_000L) {
+                val hz = (rateWindowCount - 1) * 1e9 / elapsed
+                _status.value = _status.value.copy(sampleRateHz = hz)
+                rateWindowCount = 0
+            }
         }
 
         private fun deliver(event: PipelineEvent) {

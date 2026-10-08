@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
+import com.clu.motion.core.diag.InjectionStats
 import com.clu.motion.core.input.GesturePlan
 import com.clu.motion.core.input.TouchPlanner
 
@@ -24,20 +25,30 @@ class GestureStreamer(
     private val service: AccessibilityService,
     private val handler: Handler,
     private val planner: TouchPlanner,
+    private val stats: InjectionStats,
 ) {
     private val strokes = HashMap<Int, GestureDescription.StrokeDescription>()
     private var strokesGeneration = -1
     private var callback: Callback? = null
 
-    /** Dispatches at most one gesture. Returns true if one was sent. */
-    fun pump(now: Long): Boolean {
-        val plan = planner.nextPlan(now) ?: return false
+    /**
+     * Dispatches at most one gesture. Returns true if one was sent.
+     * [frameAgeMs] = age of the motion frame that set the targets (diagnostics only).
+     */
+    fun pump(now: Long, frameAgeMs: Long? = null): Boolean {
+        val skipsBefore = planner.backpressureSkips
+        val plan = planner.nextPlan(now)
+        if (plan == null) {
+            if (planner.backpressureSkips != skipsBefore) stats.onBackpressure()
+            return false
+        }
         if (plan.generation != strokesGeneration) {
             strokes.clear() // strokes from a cancelled generation can never be continued
             strokesGeneration = plan.generation
         }
         val built = build(plan)
         if (built == null) {
+            stats.onRejected()
             planner.onDispatchFailed(plan.generation, now)
             return false
         }
@@ -49,9 +60,11 @@ class GestureStreamer(
             false
         }
         if (!accepted) {
+            stats.onRejected()
             planner.onDispatchFailed(plan.generation, now)
             return false
         }
+        if (stats.enabled) stats.onDispatch(now, frameAgeMs, plan.segments.map { Triple(it.key, it.toX, it.toY) })
         plan.segments.forEachIndexed { i, segment ->
             if (segment.willContinue) strokes[segment.key] = built.second[i] else strokes.remove(segment.key)
         }
@@ -88,10 +101,12 @@ class GestureStreamer(
 
     private inner class Callback(val generation: Int) : AccessibilityService.GestureResultCallback() {
         override fun onCompleted(gestureDescription: GestureDescription) {
+            stats.onCompleted()
             planner.onCompleted(generation)
         }
 
         override fun onCancelled(gestureDescription: GestureDescription) {
+            stats.onCancelled()
             planner.onCancelled(generation, SystemClock.uptimeMillis())
         }
     }

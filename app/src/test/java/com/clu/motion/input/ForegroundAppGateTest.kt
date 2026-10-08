@@ -8,7 +8,12 @@ import org.junit.Test
 
 class ForegroundAppGateTest {
     private val own = "com.clu.motion"
-    private val gate = ForegroundAppGate(own, setOf("com.clu.motion.ui.MainActivity"), setOf("com.android.launcher3"))
+    private val gate = ForegroundAppGate(
+        own,
+        ownBlockedActivities = setOf("com.clu.motion.ui.MainActivity"),
+        ownInjectableActivities = setOf("com.clu.motion.ui.InjectionTestActivity"),
+        homePackages = setOf("com.android.launcher3"),
+    )
 
     @Test
     fun gamesAllowInjectionAndReportTheSwitchOnce() {
@@ -29,6 +34,15 @@ class ForegroundAppGateTest {
             assertNull(gate.onWindowStateChanged(pkg, cls))
             assertFalse(pkg, gate.injectionAllowed)
         }
+    }
+
+    @Test
+    fun ourInjectionTestPadAcceptsInjection() {
+        gate.onWindowStateChanged(own, "com.clu.motion.ui.MainActivity")
+        assertFalse(gate.injectionAllowed)
+        // Same package, so not an app switch (no profile auto-select), but injection opens up.
+        assertNull(gate.onWindowStateChanged(own, "com.clu.motion.ui.InjectionTestActivity"))
+        assertTrue(gate.injectionAllowed)
     }
 
     @Test

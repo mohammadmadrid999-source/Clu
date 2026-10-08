@@ -13,7 +13,10 @@ package com.clu.motion.input
  */
 class ForegroundAppGate(
     private val ownPackage: String,
-    private val ownActivities: Set<String>,
+    /** Our own screens that must never receive injected touches (settings). */
+    private val ownBlockedActivities: Set<String>,
+    /** Our own screens built to receive them (the injection test pad). */
+    private val ownInjectableActivities: Set<String>,
     private val homePackages: Set<String>,
 ) {
     @Volatile
@@ -30,7 +33,11 @@ class ForegroundAppGate(
         val pkg = packageName?.toString() ?: return null
         val blocked = when {
             // Our own overlay windows also report our package; only our activities count.
-            pkg == ownPackage -> if (className?.toString() in ownActivities) true else return null
+            pkg == ownPackage -> when (className?.toString()) {
+                in ownBlockedActivities -> true
+                in ownInjectableActivities -> false
+                else -> return null
+            }
             pkg in IGNORED -> return null
             pkg in BLOCKED || pkg in homePackages -> true
             else -> false

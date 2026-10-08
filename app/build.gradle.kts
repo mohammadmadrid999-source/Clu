@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val gitCommitCount: Int = runCatching {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(1)
+
 android {
     namespace = "com.clu.motion"
     compileSdk = 36
@@ -14,15 +21,41 @@ android {
         // GestureDescription.StrokeDescription#continueStroke itself needs API 26.
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // Commit count: every CI or local build of a newer commit installs as an update.
+        versionCode = gitCommitCount
+        versionName = "1.1.0"
+    }
+
+    signingConfigs {
+        // Public, committed test key: CI and local builds can update each other on a test phone
+        // without uninstalling (which would reset the accessibility toggle and profiles).
+        // Never ship it to a store; set CLU_KEYSTORE_* environment variables for real releases.
+        create("test") {
+            storeFile = file("clu-test.keystore")
+            storePassword = "clutest"
+            keyAlias = "clu-test"
+            keyPassword = "clutest"
+        }
+        System.getenv("CLU_KEYSTORE_PATH")?.let { path ->
+            create("upload") {
+                storeFile = file(path)
+                storePassword = System.getenv("CLU_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("CLU_KEY_ALIAS")
+                keyPassword = System.getenv("CLU_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("test")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Release = optimised, non-debuggable: the realistic build for latency testing.
+            signingConfig = signingConfigs.findByName("upload") ?: signingConfigs.getByName("test")
         }
     }
 

@@ -81,6 +81,10 @@ class TouchPlanner(
     var generation = 0
         private set
 
+    /** Ticks that had work but waited because [maxInFlight] segments were already queued. */
+    var backpressureSkips = 0L
+        private set
+
     /** Display size used to clamp coordinates (paths must not be negative or off-screen). */
     var width = 1
     var height = 1
@@ -151,7 +155,11 @@ class TouchPlanner(
 
     /** Builds the next segment batch, or null if there is nothing to send or we must wait. */
     fun nextPlan(now: Long): GesturePlan? {
-        if (now < resumeAt || inFlight >= maxInFlight) return null
+        if (now < resumeAt) return null
+        if (inFlight >= maxInFlight) {
+            if (pointers.isNotEmpty()) backpressureSkips++
+            return null
+        }
         for (p in pointers.values) {
             if (p.down && !p.lifting && now >= p.releaseAt) p.lifting = true
         }
