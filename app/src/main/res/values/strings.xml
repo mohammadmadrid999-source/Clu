@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Clu</string>
+
+    <!-- Accessibility service (shown in system Accessibility settings) -->
+    <string name="a11y_service_label">Clu motion controls</string>
+    <string name="a11y_service_summary">Play games by tilting or turning your phone or head</string>
+    <string name="a11y_service_description">Clu turns small movements of your device into touches and joystick drags in games, for people who find touch screens hard to use. It needs to perform gestures on your behalf and to see which app is in front, so it can pause itself in Settings and on the home screen. It also listens for keys you choose, such as a switch interface or volume buttons. Clu does not read what is on your screen.</string>
+
+    <!-- HUD -->
+    <string name="hud_indicator_description">Clu tilt indicator</string>
+    <string name="hud_toggle_controls">show or hide Clu controls</string>
+    <string name="hud_state_paused">Paused</string>
+    <string name="hud_state_calibrating">Calibrating</string>
+    <string name="hud_state_centered">Centered</string>
+    <string name="hud_state_tilt">Stick %1$d%% right, %2$d%% forward</string>
+    <string name="hud_start">Start</string>
+    <string name="hud_pause">Pause</string>
+    <string name="hud_resume">Resume</string>
+    <string name="hud_recenter">Recenter</string>
+    <string name="hud_profile">Profile</string>
+    <string name="hud_profile_description">Next profile. Current profile: %1$s</string>
+    <string name="hud_layout">Layout</string>
+    <string name="hud_learn">Learn moves</string>
+    <string name="hud_move">Move panel</string>
+    <string name="hud_stop">Stop</string>
+    <string name="hud_hide">Hide</string>
+
+    <string name="status_stopped">Stopped. Tap Start to play.</string>
+    <string name="status_paused">Paused. Hold any direction or tap Resume.</string>
+    <string name="status_calibrating">Hold still… setting your center</string>
+    <string name="status_learn_move">Move %1$s as far as is comfortable, then hold</string>
+    <string name="status_learn_return">Back to center…</string>
+    <string name="learn_right">RIGHT</string>
+    <string name="learn_left">LEFT</string>
+    <string name="learn_up">FORWARD (up)</string>
+    <string name="learn_down">BACK (down)</string>
+
+    <!-- Engine notices -->
+    <string name="notice_calibrating">Hold still… setting your center</string>
+    <string name="notice_calibrated">Center set</string>
+    <string name="notice_calibrated_unstable">Center set, but there was a lot of movement. Tap Recenter when you are settled.</string>
+    <string name="notice_learned">Your moves are learned and saved to this profile</string>
+    <string name="notice_paused">Paused</string>
+    <string name="notice_paused_erratic">Paused: lots of sudden movement. Hold any direction to resume.</string>
+    <string name="notice_paused_drop">Paused: the phone may have been dropped. Tap Resume when ready.</string>
+    <string name="notice_paused_rest">Break time. Hold any direction to resume.</string>
+    <string name="notice_paused_screen_off">Paused because the screen turned off</string>
+    <string name="notice_paused_layout">Paused while you edit the layout</string>
+    <string name="notice_resumed">Resumed</string>
+    <plurals name="notice_rest_reminder">
+        <item quantity="one">You have played for %1$d minute. Maybe take a short break?</item>
+        <item quantity="other">You have played for %1$d minutes. Maybe take a short break?</item>
+    </plurals>
+    <string name="notice_fatigue">Your movements look more tired than earlier. Consider a rest, or tap Recenter.</string>
+    <string name="notice_profile">Profile: %1$s</string>
+    <string name="notice_fgs_denied">Running without the background service. If Android stops Clu, open the app and start again.</string>
+    <string name="notice_mic_denied">The sound trigger needs microphone permission. Turn it on in Clu.</string>
+    <string name="notice_service_off">Turn on Clu in Accessibility settings so it can control games.</string>
+    <string name="notice_overlap">This panel covers a game control. Tap Move panel.</string>
+
+    <!-- Layout editor -->
+    <string name="joystick_name_stick">Stick</string>
+    <string name="joystick_name_camera">Camera pad</string>
+    <string name="editor_next">Next</string>
+    <string name="editor_nudge_left">Move left</string>
+    <string name="editor_nudge_up">Move up</string>
+    <string name="editor_nudge_down">Move down</string>
+    <string name="editor_nudge_right">Move right</string>
+    <string name="editor_smaller">Size −</string>
+    <string name="editor_bigger">Size +</string>
+    <string name="editor_toggle">On/off</string>
+    <string name="editor_link">Link game</string>
+    <string name="editor_unlink">Unlink game</string>
+    <string name="editor_bar">Move bar</string>
+    <string name="editor_cancel">Cancel</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_on">on</string>
+    <string name="editor_off">off</string>
+    <string name="editor_selected_stick">Selected: %1$s at %2$d%% across, %3$d%% down. Drag it onto the game\'s stick, or use the arrows.</string>
+    <string name="editor_selected_button">Selected: button %1$s (%2$s) at %3$d%% across, %4$d%% down.</string>
+
+    <!-- Notification -->
+    <string name="notif_channel">Motion control session</string>
+    <string name="notif_channel_description">Shown while Clu is turning your movements into touches</string>
+    <string name="notif_active">Clu is active</string>
+    <string name="notif_paused">Clu is paused</string>
+    <string name="notif_stopped">Clu stopped</string>
+
+    <!-- Main screen -->
+    <string name="main_intro">Play games with small movements of your phone, hands or head. Clu turns them into joystick drags and button taps over any game.</string>
+    <string name="section_setup">Setup</string>
+    <string name="section_session">Session</string>
+    <string name="section_profile">Profile</string>
+    <string name="section_movement">Movement</string>
+    <string name="section_tremor">Tremor and spasms</string>
+    <string name="section_actions">Hands-free actions</string>
+    <string name="section_safety">Safety and comfort</string>
+    <string name="section_display">Display</string>
+
+    <string name="setup_service_on">Accessibility service: on</string>
+    <string name="setup_service_starting">Accessibility service: turned on, starting…</string>
+    <string name="setup_service_off">Accessibility service: off. Turn on \"Clu motion controls\" to control games.</string>
+    <string name="setup_restricted_settings">If Clu is greyed out in Accessibility settings (common when installed outside an app store), open App info, tap the ⋮ menu and choose \"Allow restricted settings\".</string>
+    <string name="setup_notifications_on">Notifications: allowed (session controls appear in the notification shade)</string>
+    <string name="setup_notifications_off">Notifications: not allowed. Allow them to get Pause, Recenter and Stop in the notification shade.</string>
+    <string name="setup_battery">Some phones close background apps aggressively. If Clu stops during play, set its battery usage to \"Unrestricted\".</string>
+    <string name="setup_sensor">Motion sensor: %1$s</string>
+    <string name="setup_sensor_unreliable">Motion sensor: %1$s (unreliable right now; magnets or motors nearby can cause this)</string>
+    <string name="setup_sensor_idle">Motion sensor: starts with the session</string>
+    <string name="session_active">Active. Switch to your game; touches pause automatically while this screen is open.</string>
+    <string name="session_hint">Hold your device in your most comfortable position when you tap Start or Recenter. That position becomes \"center\".</string>
+    <string name="layout_hint">To place the stick and buttons on a game\'s controls, open the game and tap Layout on the Clu panel.</string>
+
+    <string name="action_open_accessibility">Accessibility settings</string>
+    <string name="action_app_info">App info</string>
+    <string name="action_allow_notifications">Allow notifications</string>
+    <string name="action_battery_settings">Battery settings</string>
+    <string name="action_learn_moves">Learn my moves</string>
+    <string name="action_duplicate">Duplicate</string>
+    <string name="action_reset">Reset tuning</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_add_key">Add key or switch…</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_none">Nothing</string>
+    <string name="action_tap">Tap %1$s</string>
+    <string name="action_hold">Hold %1$s</string>
+    <string name="action_toggle">Toggle %1$s</string>
+    <string name="action_pause_resume">Pause / resume</string>
+    <string name="action_next_profile">Next profile</string>
+    <string name="action_back">Back</string>
+    <string name="action_home">Home</string>
+    <string name="action_recents">Recent apps</string>
+    <string name="profile_copy_name">%1$s (copy)</string>
+
+    <string name="label_profile">Profile</string>
+    <string name="label_full_tilt">Tilt for full speed</string>
+    <string name="label_deadzone">Rest zone (no movement)</string>
+    <string name="label_axis_mode">How you move</string>
+    <string name="axis_tilt">Tilt (like a tray or steering wheel)</string>
+    <string name="axis_turn">Turn and nod (head)</string>
+    <string name="axis_device">Device axes</string>
+    <string name="axis_learned">My learned moves</string>
+    <string name="label_invert_x">Swap left and right</string>
+    <string name="label_invert_y">Swap forward and back</string>
+    <string name="label_curve">Response</string>
+    <string name="curve_linear">Even</string>
+    <string name="curve_power">Boost small movements</string>
+    <string name="curve_sigmoid">Soft start, quick full speed</string>
+    <string name="label_boost">Curve strength (below 1 boosts small moves)</string>
+    <string name="label_sigmoid_mid">S-curve midpoint</string>
+    <string name="label_anti_deadzone">Game dead-zone compensation</string>
+    <string name="label_angle_snap">Snap to straight directions</string>
+    <string name="label_output">Stick output</string>
+    <string name="output_analog">Smooth (analog)</string>
+    <string name="output_8">8 directions</string>
+    <string name="output_4">4 directions</string>
+    <string name="label_joystick_mode">Motion controls</string>
+    <string name="joystick_stick">A joystick</string>
+    <string name="joystick_camera">A camera / look pad</string>
+    <string name="joystick_off">Nothing (actions only)</string>
+    <string name="label_camera_speed">Camera speed</string>
+    <string name="label_release_after">Let go of the stick after resting</string>
+    <string name="label_hold_center">Keep the stick held at center</string>
+    <string name="label_magnetometer">Use compass to stop slow turning drift</string>
+    <string name="label_filter">Smoothing method</string>
+    <string name="filter_one_euro">Adaptive (recommended)</string>
+    <string name="filter_kalman">Predictive (Kalman)</string>
+    <string name="filter_none">Off</string>
+    <string name="label_steadiness">Steadiness at rest (lower is steadier)</string>
+    <string name="label_responsiveness">Responsiveness when moving</string>
+    <string name="label_spasm_guard">Ignore sudden jerks and spasms</string>
+    <string name="label_spasm_speed">Jerk speed to ignore</string>
+    <string name="label_auto_tune">Tune to my tremor when I recenter</string>
+    <string name="label_dwell">Hold a direction to trigger an action</string>
+    <string name="label_dwell_time">Hold time</string>
+    <string name="label_dwell_resume">When paused, hold any direction to resume</string>
+    <string name="label_flicks">Quick flicks trigger actions</string>
+    <string name="label_flick_size">Smallest flick</string>
+    <string name="label_sound">Mouth click or tap sound triggers an action</string>
+    <string name="sound_hint">Uses the microphone to detect short clicks only. Nothing is recorded or sent. Headphones stop game sounds from triggering it.</string>
+    <string name="label_bindings">What each action does</string>
+    <string name="label_key_bindings">Keys and switches</string>
+    <string name="key_bindings_hint">USB and Bluetooth switch interfaces usually send Space or Enter. Keys only work during a session; when paused, the volume keys work normally.</string>
+    <string name="key_binding_description">Action for key %1$s</string>
+    <string name="key_remove_description">Remove key %1$s</string>
+    <string name="key_learn_prompt">Press the key or switch now…</string>
+    <string name="key_learned">Added %1$s. Choose what it does below.</string>
+    <string name="label_drop">Pause if the phone is dropped</string>
+    <string name="label_erratic">Pause on lots of sudden movement</string>
+    <string name="label_rest">Rest reminder</string>
+    <string name="label_enforce_break">Pause for the break, not just remind</string>
+    <string name="label_fatigue">Tell me if my movements look tired</string>
+    <string name="label_touch_points">Show touch points over the game</string>
+
+    <string name="trigger_dwell_up">Hold forward</string>
+    <string name="trigger_dwell_down">Hold back</string>
+    <string name="trigger_dwell_left">Hold left</string>
+    <string name="trigger_dwell_right">Hold right</string>
+    <string name="trigger_flick_up">Flick forward</string>
+    <string name="trigger_flick_down">Flick back</string>
+    <string name="trigger_flick_left">Flick left</string>
+    <string name="trigger_flick_right">Flick right</string>
+    <string name="trigger_twist_left">Twist left</string>
+    <string name="trigger_twist_right">Twist right</string>
+    <string name="trigger_sound">Sound click</string>
+
+    <string name="fmt_label_value">%1$s: %2$s</string>
+    <string name="fmt_degrees">%1$.1f°</string>
+    <string name="fmt_deg_per_s">%1$.0f°/s</string>
+    <string name="fmt_hz">%1$.2f Hz</string>
+    <string name="fmt_ms">%1$.0f ms</string>
+    <string name="fmt_minutes">%1$.0f min</string>
+    <string name="fmt_percent">%1$d%%</string>
+    <string name="fmt_px_per_s">%1$.0f px/s</string>
+    <string name="off">Off</string>
+</resources>

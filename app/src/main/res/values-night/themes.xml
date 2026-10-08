@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Clu" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#FFA8C7FA</item>
+        <item name="android:colorPrimary">#FFA8C7FA</item>
+    </style>
+</resources>

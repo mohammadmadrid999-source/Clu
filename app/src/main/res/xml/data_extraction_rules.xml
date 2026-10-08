@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+: back up the user's tuned profiles (often hours of careful adjustment) to their
+  cloud backup and carry them to a new phone. Only the profile DataStore is included; HUD
+  placement (shared prefs) is device-specific and stays local.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="datastore/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="datastore/" />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Minimal capability set:
+  - canPerformGestures: dispatchGesture() for touch injection.
+  - canRequestFilterKeyEvents + flagRequestFilterKeyEvents: volume/headset keys and USB/Bluetooth
+    switch interfaces as action buttons.
+  - typeWindowStateChanged only, and canRetrieveWindowContent="false": the service learns which app
+    is in front (package/class) but never reads screen content.
+  - isAccessibilityTool: this app exists to help people with disabilities (Play policy).
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canPerformGestures="true"
+    android:canRequestFilterKeyEvents="true"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/a11y_service_description"
+    android:isAccessibilityTool="true"
+    android:notificationTimeout="0"
+    android:settingsActivity="com.clu.motion.ui.MainActivity"
+    android:summary="@string/a11y_service_summary"
+    tools:ignore="UnusedAttribute" />

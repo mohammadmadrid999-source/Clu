@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Clu" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#FF0B57D0</item>
+        <item name="android:colorPrimary">#FF0B57D0</item>
+    </style>
+
+    <!-- Overlay views are always dark and high contrast, whatever the system theme. -->
+    <style name="Theme.Clu.Overlay" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#FFFFD400</item>
+    </style>
+</resources>
