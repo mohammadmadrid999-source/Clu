@@ -235,6 +235,11 @@ class OverlayController(
             },
             onEnd = { moveHud(hudPlacement) },
         )
+        // Pause straight from the bubble (Switch Access / TalkBack actions), without expanding first.
+        ViewCompat.addAccessibilityAction(hud.indicator, ctx.getString(R.string.hud_pause_action)) { _, _ ->
+            engine.togglePause()
+            true
+        }
         addMoveActions(hud.indicator, R.string.hud_move_left, R.string.hud_move_right, R.string.hud_move_up, R.string.hud_move_down) { dx, dy ->
             moveHud(PanelGeometry.stepped(hudPlacement, dx, dy))
         }
@@ -245,7 +250,7 @@ class OverlayController(
             // Absolute screen coordinates (as for the full-screen windows), so x/y are exactly where
             // the panel is drawn; placeHud keeps it on screen.
             flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN // not NO_LIMITS: the system also keeps it on screen
             layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             } else {
@@ -283,7 +288,9 @@ class OverlayController(
         }
         val prompting = session != SessionState.Stopped && (phase == PipelinePhase.CALIBRATING || phase == PipelinePhase.LEARNING)
         val noticeShowing = notice != null && SystemClock.uptimeMillis() < noticeUntil
-        hud.show(expanded = userExpanded && !shrunkForPlay, showStatus = prompting || noticeShowing)
+        // An important notice ("paused: …, tap Resume") brings the buttons it talks about.
+        val important = noticeShowing && notice?.important == true
+        hud.show(expanded = (userExpanded && !shrunkForPlay) || important, showStatus = prompting || noticeShowing)
     }
 
     /** Moves the panel to [p] and remembers it. "Move panel" cycles edges: no dragging needed. */
@@ -442,10 +449,8 @@ class OverlayController(
             widgets,
             EditorActions(
                 nudge = { dx, dy -> ed.nudge(dx, dy) },
-                next = {
-                    ed.selectNext()
-                    keepBarOffSelection()
-                },
+                // No auto-move here: the bar must not jump away from under the finger tapping Next.
+                next = { ed.selectNext() },
                 resize = { ed.resizeJoystick(it) },
                 toggleButton = { ed.toggleSelectedButton() },
                 toggleLink = { toggleLink() },

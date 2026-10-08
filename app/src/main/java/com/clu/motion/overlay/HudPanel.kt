@@ -44,7 +44,7 @@ internal class HudPanel(private val w: OverlayWidgets, actions: HudActions) {
         )
     }
 
-    val status = w.statusText(13f).apply {
+    val status = w.statusText(13f, lines = 4).apply {
         maxWidth = w.dp(STATUS_MAX_WIDTH_DP)
         setPadding(w.dp(2), 0, w.dp(2), w.dp(2))
         accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE

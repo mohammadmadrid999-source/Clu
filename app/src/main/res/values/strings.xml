@@ -29,6 +29,7 @@
     <string name="hud_stop">Stop</string>
     <string name="hud_hide">Hide</string>
     <string name="hud_more">More</string>
+    <string name="hud_pause_action">Pause or resume play</string>
     <string name="hud_less">Less</string>
     <string name="hud_move_left">Move panel left</string>
     <string name="hud_move_right">Move panel right</string>
@@ -74,7 +75,7 @@
     <string name="notice_mic_silenced">Sound click is muted: another app (often a game\'s voice chat) is using the microphone, or the microphone is switched off in quick settings.</string>
     <string name="notice_mic_denied">The sound trigger needs microphone permission. Turn it on in Clu.</string>
     <string name="notice_service_off">Turn on Clu in Accessibility settings so it can control games.</string>
-    <string name="notice_overlap">This panel covers a game control. Tap Move panel.</string>
+    <string name="notice_overlap">This panel covers a game control. Drag the round indicator away, or use More › Move panel.</string>
 
     <!-- Layout editor -->
     <string name="joystick_name_stick">Stick</string>

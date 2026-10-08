@@ -31,11 +31,11 @@ internal class OverlayWidgets(val ctx: Context) {
         setOnClickListener { onClick() }
     }
 
-    fun statusText(sizeSp: Float) = TextView(ctx).apply {
+    fun statusText(sizeSp: Float, lines: Int = 2) = TextView(ctx).apply {
         setTextColor(Color.WHITE)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         // Visually short; screen readers still read the whole text.
-        maxLines = 2
+        maxLines = lines
         ellipsize = TextUtils.TruncateAt.END
     }
 

@@ -20,7 +20,8 @@ class DragTouchListener(
     private val onEnd: () -> Unit,
 ) : View.OnTouchListener {
 
-    private val slop = ViewConfiguration.get(view.context).scaledTouchSlop
+    // Well above the system touch slop: a press with a tremor must still be a tap, not a drag.
+    private val slop = maxOf(ViewConfiguration.get(view.context).scaledTouchSlop.toFloat(), DRAG_SLOP_DP * view.resources.displayMetrics.density)
     private var downX = 0f
     private var downY = 0f
     private var dragging = false
@@ -60,6 +61,8 @@ class DragTouchListener(
     }
 
     companion object {
+        const val DRAG_SLOP_DP = 24f
+
         /** Makes [view] draggable; returns the listener (already installed). */
         fun attach(view: View, onStart: () -> Unit, onDrag: (Float, Float) -> Unit, onEnd: () -> Unit) =
             DragTouchListener(view, onStart, onDrag, onEnd).also { view.setOnTouchListener(it) }
