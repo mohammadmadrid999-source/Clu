@@ -18,6 +18,7 @@ data class ControlProfile(
     val filter: FilterConfig = FilterConfig(),
     val response: ResponseConfig = ResponseConfig(),
     val joystick: JoystickConfig = JoystickConfig(),
+    val aim: AimConfig = AimConfig(),
     val dwell: DwellConfig = DwellConfig(),
     val flick: FlickConfig = FlickConfig(),
     val safety: SafetyConfig = SafetyConfig(),
@@ -27,7 +28,11 @@ data class ControlProfile(
     /** Packages that auto-select this profile when they come to the foreground. */
     val linkedPackages: List<String> = emptyList(),
     val showTouchPoints: Boolean = false,
-)
+) {
+    /** The aim pad is in use now or can be switched to. */
+    val usesAim: Boolean
+        get() = joystick.mode == JoystickMode.AIM || bindings.any { it.action == ActionType.SWITCH_MOVE_AIM }
+}
 
 @Serializable
 data class SensorConfig(
@@ -139,6 +144,13 @@ enum class JoystickMode {
     /** Rate control for camera/look pads: tilt sets finger velocity; lifts and re-centres at the pad edge. */
     CAMERA_DRAG,
 
+    /**
+     * Gyro-style aiming on a look pad: the finger moves as far as the device turned and stops
+     * when it stops (see [AimConfig]). Far more precise than [CAMERA_DRAG] for slow or
+     * imprecise movement, because there is no speed to hold steady and nothing to overshoot.
+     */
+    AIM,
+
     /** Motion drives triggers only. */
     OFF,
 }
@@ -149,7 +161,7 @@ data class JoystickConfig(
     /** Anchor as a fraction of the display (current rotation). */
     val centerX: Double = 0.18,
     val centerY: Double = 0.72,
-    /** Stick radius (or half-size of the camera pad) as a fraction of min(display width, height). */
+    /** Stick radius (or half-size of the camera/aim pad) as a fraction of min(display width, height). */
     val radiusFraction: Double = 0.11,
     /** Lift the virtual finger after resting in the deadzone this long. */
     val releaseAfterNeutralMs: Long = 250,
@@ -160,6 +172,58 @@ data class JoystickConfig(
     val segmentMs: Long = 16,
     /** Injected segments allowed in flight; bounds queueing latency to ≈ maxInFlight × segmentMs. */
     val maxInFlight: Int = 2,
+)
+
+/**
+ * Tuning for [JoystickMode.AIM]. The aim follows the *change* in the filtered tilt (after the
+ * spasm gate and tremor filter), not the tilt itself, so the finger moves by as much as the device
+ * turned and holds still when it does.
+ */
+@Serializable
+data class AimConfig(
+    /**
+     * The look pad, separate from the movement stick so a trigger can switch between them. Its
+     * centre is a fraction of the display (current rotation). Its half-size is a fraction of
+     * min(width, height). At the pad edge the finger lifts and re-grips at the centre.
+     */
+    val padX: Double = 0.70,
+    val padY: Double = 0.45,
+    val padRadiusFraction: Double = 0.22,
+    /**
+     * Finger travel, as a fraction of the screen's short side, for a movement across the whole
+     * tilt range (neutral to full tilt). Ranges are per direction, so a small or one-sided range
+     * still reaches as far.
+     */
+    val sensitivity: Double = 0.5,
+    /** Sensitivity multiplier while precision aim is on (like a scope); toggled by a trigger. */
+    val precisionScale: Double = 0.35,
+    /**
+     * Motion slower than this is scaled down smoothly, so leftover tremor and slow drift don't
+     * creep the aim while deliberate motion passes in full ("tightening"). Raised automatically
+     * from the tremor measured at calibration. 0 = off.
+     */
+    val steadyBelowDegPerSec: Double = 1.0,
+    /**
+     * Below this speed the aim follows a moving average of the motion instead of each sample
+     * ("soft tiered smoothing"): small corrections lose the tremor riding on them, at the cost of
+     * half a window of lag; fast turns (above twice this) pass unsmoothed. 0 = off.
+     */
+    val smoothBelowDegPerSec: Double = 10.0,
+    /** Averaging window. Auto-tuned to one period of the tremor measured at calibration. */
+    val smoothWindowMs: Long = 200,
+    /** Up to this multiplier for fast motion (1 = off): slow moves stay fine, quick ones reach far. */
+    val accelerationMax: Double = 1.0,
+    val accelerationStartDegPerSec: Double = 15.0,
+    val accelerationFullDegPerSec: Double = 60.0,
+    /**
+     * Holding a tilt beyond this fraction of the range keeps turning, for turns larger than the
+     * range of motion allows (0 = off).
+     */
+    val edgeTurnFrom: Double = 0.8,
+    /** Edge-turn speed at full tilt, in whole-range movements per second. */
+    val edgeTurnSpeed: Double = 1.5,
+    /** Lift the finger after this long without aim motion; it re-grips at the pad centre on the next move. */
+    val releaseAfterIdleMs: Long = 1500,
 )
 
 @Serializable
@@ -266,6 +330,12 @@ enum class ActionType {
     BACK,
     HOME,
     RECENTS,
+
+    /** Switches tilt between the movement stick and gyro aim ([JoystickMode.AIM]). */
+    SWITCH_MOVE_AIM,
+
+    /** Turns precision aim (reduced aim sensitivity) on or off. */
+    TOGGLE_PRECISION,
 }
 
 @Serializable

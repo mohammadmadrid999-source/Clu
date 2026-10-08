@@ -23,12 +23,13 @@ class ProfileRepository(private val context: Context) {
 
     private val json = Json {
         ignoreUnknownKeys = true // forward compatible with downgrades
+        coerceInputValues = true // an enum value from a newer version falls back to the default
         encodeDefaults = true
     }
 
     val state: Flow<ProfileState> = context.profileStore.data
         .map { prefs ->
-            val profiles = prefs[KEY_PROFILES]?.let(::decode)?.takeIf { it.isNotEmpty() } ?: Presets.all()
+            val profiles = stored(prefs[KEY_PROFILES])
             ProfileState(profiles, prefs[KEY_ACTIVE] ?: profiles.first().id)
         }
         .distinctUntilChanged()
@@ -62,6 +63,11 @@ class ProfileRepository(private val context: Context) {
                     centerY = current.joystick.centerY,
                     radiusFraction = current.joystick.radiusFraction,
                 ),
+                aim = preset.aim.copy(
+                    padX = current.aim.padX,
+                    padY = current.aim.padY,
+                    padRadiusFraction = current.aim.padRadiusFraction,
+                ),
                 linkedPackages = current.linkedPackages,
             )
         }
@@ -69,9 +75,15 @@ class ProfileRepository(private val context: Context) {
 
     private suspend fun edit(transform: (List<ControlProfile>) -> List<ControlProfile>) {
         context.profileStore.edit { prefs ->
-            val current = prefs[KEY_PROFILES]?.let(::decode)?.takeIf { it.isNotEmpty() } ?: Presets.all()
-            prefs[KEY_PROFILES] = json.encodeToString(transform(current))
+            prefs[KEY_PROFILES] = json.encodeToString(transform(stored(prefs[KEY_PROFILES])))
         }
+    }
+
+    /** Stored profiles, plus any built-in preset added since they were saved (presets can't be deleted). */
+    private fun stored(raw: String?): List<ControlProfile> {
+        val profiles = raw?.let(::decode)?.takeIf { it.isNotEmpty() } ?: return Presets.all()
+        val missing = Presets.all().filter { preset -> profiles.none { it.id == preset.id } }
+        return profiles + missing
     }
 
     private fun decode(raw: String): List<ControlProfile>? = try {

@@ -1,9 +1,11 @@
 package com.clu.motion.core
 
+import com.clu.motion.core.input.AimSample
 import com.clu.motion.core.input.JoystickDriver
 import com.clu.motion.core.input.PointerSegment
 import com.clu.motion.core.input.TouchPlanner
 import com.clu.motion.core.response.StickOutput
+import com.clu.motion.profile.AimConfig
 import com.clu.motion.profile.JoystickConfig
 import com.clu.motion.profile.JoystickMode
 import org.junit.Assert.assertEquals
@@ -12,6 +14,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 class TouchPlannerTest {
     private fun planner() = TouchPlanner(segmentMs = 16, maxInFlight = 2).apply {
@@ -287,4 +290,148 @@ class JoystickDriverTest {
         assertTrue(regrip.isNewStroke)
         assertEquals(400 to 700, regrip.fromX to regrip.fromY)
     }
+
+    @Test
+    fun cameraMotionDuringAReGripIsCarriedOverNotLost() {
+        val p = TouchPlanner(maxInFlight = 100).apply { width = w; height = h }
+        val d = JoystickDriver(cfg.copy(mode = JoystickMode.CAMERA_DRAG, cameraSpeedPxPerSec = 1000.0))
+        val segments = drive(p, 0L..1000L) { t -> d.update(StickOutput(1.0, 0.0), true, t, w, h, p) }
+        val dragged = segments.filter { !it.isNewStroke }.sumOf { it.toX - it.fromX }
+        assertTrue("re-gripped", segments.count { it.isNewStroke } >= 3)
+        assertEquals(1000.0, dragged.toDouble(), 40.0) // 1000 px/s for 1 s, minus at most a tick or two
+    }
+}
+
+class AimDriverTest {
+    private val w = 2000
+    private val h = 1000
+
+    // Pad centre (1200, 500), half-size 300 px; 1 aim unit = 0.5 × 1000 = 500 px.
+    private val aim = AimConfig(padX = 0.6, padY = 0.5, padRadiusFraction = 0.3, sensitivity = 0.5, edgeTurnFrom = 0.8, edgeTurnSpeed = 1.0, releaseAfterIdleMs = 1500)
+    private val cfg = JoystickConfig(mode = JoystickMode.AIM)
+
+    private fun planner() = TouchPlanner(maxInFlight = 100).apply { width = w; height = h }
+
+    @Test
+    fun theFingerMovesByHowFarTheDeviceTurnedAndStopsWhenItStops() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        d.update(StickOutput.ZERO, true, 0, w, h, p, AimSample(0.0, 0.0))
+        assertFalse("no touch before any motion", p.has(TouchPlanner.JOYSTICK_KEY))
+        d.update(StickOutput.ZERO, true, 16, w, h, p, AimSample(0.01, 0.0)) // 5 px
+        val down = p.nextPlan(16)!!.segments.single()
+        assertTrue(down.isNewStroke)
+        assertEquals(1200 to 500, down.fromX to down.fromY) // grips at the pad centre
+        p.onCompleted(0)
+        d.update(StickOutput.ZERO, true, 32, w, h, p, AimSample(0.02, -0.01))
+        val move = p.nextPlan(32)!!.segments.single()
+        assertEquals(1210 to 495, move.toX to move.toY)
+        p.onCompleted(0)
+        for (t in 48L..1000L step 16) {
+            d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.02, -0.01))
+            assertNull("held still: nothing is sent", p.nextPlan(t))
+        }
+        assertTrue(p.has(TouchPlanner.JOYSTICK_KEY))
+    }
+
+    @Test
+    fun slowAimAddsUpSubPixelStepsWithoutEverRePressing() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        // 0.15 px per tick (≈ 9 px/s, a fraction of a degree per second): rounding alone would lose all of it.
+        val segments = drive(p, 0L..4000L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.0003 * t / 16, 0.0)) }
+        assertEquals("one touch-down, no re-press", 1, segments.count { it.isNewStroke })
+        assertTrue("never lifted", segments.all { it.willContinue })
+        val last = segments.last()
+        assertEquals(1200.0 + 0.0003 * 4000 / 16 * 500, last.toX.toDouble(), 1.5)
+        // The motion that built up before the touch-down lands first; after that, 1 px at a time.
+        assertTrue("moves in 1 px steps", segments.filter { !it.isNewStroke }.drop(1).all { abs(it.toX - it.fromX) <= 1 })
+    }
+
+    @Test
+    fun aLongAimReGripsAtThePadEdgeWithoutLosingMotion() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        // 10 px per tick to the right for 1600 ms: 1000 px, more than three pad widths.
+        val segments = drive(p, 0L..1600L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.02 * t / 16, 0.0)) }
+        assertTrue(segments.count { it.isNewStroke } >= 3)
+        assertTrue("every grip starts at the pad centre", segments.filter { it.isNewStroke }.all { it.fromX == 1200 && it.fromY == 500 })
+        assertTrue("stays on the pad", segments.all { it.toX in 900..1500 })
+        val dragged = segments.filter { !it.isNewStroke }.sumOf { it.toX - it.fromX }
+        assertEquals(1000.0, dragged.toDouble(), 25.0)
+    }
+
+    @Test
+    fun holdingATiltBeyondTheEdgeKeepsTurning() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        val inside = drive(p, 0L..1000L) { t -> d.update(StickOutput(0.75, 0.0), true, t, w, h, p, AimSample(0.0, 0.0)) }
+        assertTrue("below the edge threshold nothing turns", inside.isEmpty())
+        // 0.9 of the range: half-way into the edge band → 0.5 × 1 unit/s × 500 px = 250 px/s.
+        val beyond = drive(p, 1000L..2000L) { t -> d.update(StickOutput(0.9, 0.0), true, t, w, h, p, AimSample(0.0, 0.0)) }
+        val turned = beyond.filter { !it.isNewStroke }.sumOf { it.toX - it.fromX }
+        assertEquals(250.0, turned.toDouble(), 20.0)
+    }
+
+    @Test
+    fun theFingerLetsGoAfterRestingAndReGripsAtTheCentre() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        drive(p, 0L..160L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.01 * t / 16, 0.0)) }
+        val rest = drive(p, 176L..2000L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.1, 0.0)) }
+        assertTrue("lifted after resting", rest.any { !it.willContinue })
+        assertFalse(p.has(TouchPlanner.JOYSTICK_KEY))
+        val again = drive(p, 2016L..2100L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.1 + 0.01 * (t - 2000) / 16, 0.0)) }
+        assertEquals(1200 to 500, again.first { it.isNewStroke }.let { it.fromX to it.fromY })
+    }
+
+    @Test
+    fun switchingBetweenStickAndAimLiftsTheFingerFirst() {
+        val p = planner()
+        val d = JoystickDriver(JoystickConfig(mode = JoystickMode.STICK, centerX = 0.2, centerY = 0.7), aim)
+        d.update(StickOutput(1.0, 0.0), true, 0, w, h, p)
+        p.nextPlan(0)
+        p.onCompleted(0)
+        d.config = cfg
+        d.update(StickOutput(1.0, 0.0), true, 16, w, h, p, AimSample(0.0, 0.0))
+        assertTrue(p.isLifting(TouchPlanner.JOYSTICK_KEY))
+        val lift = p.nextPlan(16)!!.segments.single()
+        assertFalse(lift.willContinue)
+        assertTrue("lifted at the stick, not dragged to the aim pad", lift.toX < 600)
+    }
+
+    @Test
+    fun aPadAtTheScreenEdgeNeverTurnsIntoATapLoop() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim.copy(padX = 1.0, padY = 0.5))
+        // Aiming right, into the screen edge, for three seconds: one touch-down, no lift.
+        val segments = drive(p, 0L..3000L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.02 * t / 16, 0.0)) }
+        assertTrue(segments.count { it.isNewStroke } <= 1)
+        assertTrue(segments.all { it.willContinue })
+        // Aiming back left still works from there.
+        val back = drive(p, 3008L..3500L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.02 * 3000 / 16 - 0.02 * (t - 3000) / 16, 0.0)) }
+        assertTrue(back.filter { !it.isNewStroke }.sumOf { it.toX - it.fromX } < -100)
+    }
+
+    @Test
+    fun noAimSampleMeansNoMotion() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        d.update(StickOutput.ZERO, true, 0, w, h, p, AimSample(0.0, 0.0))
+        d.update(StickOutput.ZERO, true, 16, w, h, p, null) // e.g. play paused or stick locked
+        d.update(StickOutput.ZERO, true, 32, w, h, p, AimSample(5.0, 5.0)) // re-anchors: no jump
+        assertFalse(p.has(TouchPlanner.JOYSTICK_KEY))
+    }
+}
+
+/** Runs one driver update and one planner tick every 16 ms over [range], completing each gesture. */
+private fun drive(p: TouchPlanner, range: LongRange, update: (Long) -> Unit): List<PointerSegment> {
+    val out = ArrayList<PointerSegment>()
+    for (t in range step 16) {
+        update(t)
+        val plan = p.nextPlan(t) ?: continue
+        out += plan.segments
+        p.onCompleted(plan.generation)
+    }
+    return out
 }

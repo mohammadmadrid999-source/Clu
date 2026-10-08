@@ -102,7 +102,43 @@ What good looks like in the report:
 Then try a real game: Setup › **Start**, hold still about 2 s, open the game, tap **Layout** on
 the Clu panel, drag the stick and buttons onto the game's controls, **Save**, and play.
 
-## 5. If Clu stops working
+## 5. Aiming in shooters
+
+Use **Aiming (gyro aim)**. The aim moves only while you move, by as much as you move, and stops
+when you stop. There is no camera speed to control, so slow or unsteady movement doesn't
+overshoot. (Camera / look pad mode is the opposite: tilt sets the camera speed, which is hard to
+stop exactly on a target.)
+
+1. Clu › Profile: choose **Shooter aim**. Or, in your own profile, set **Motion controls** to
+   **Aiming (gyro aim, most precise)**.
+2. Start, open the game, tap **Layout**. Next to the stick there is now an **Aim pad** square.
+   Drag it onto the game's empty look area, usually the middle of the right half, away from the
+   fire and jump buttons. Drag **A** onto the fire button. **Save**.
+3. Hold still about 2 s at the start (calibration), then aim with small, slow movements.
+
+The Shooter aim preset's bindings:
+
+| You do | Clu does |
+|---|---|
+| Twist right, a mouth click/sound (if Sound is on), Space or volume up | Fire (button A) |
+| Twist left, Enter or the headset button | Switch between walking (stick) and aiming |
+| Volume down | Precision aim on/off (slower, finer aim, like a scope) |
+| Tilt further than 80 % of your range and hold | Keep turning (for turning around) |
+
+Tune it under **Aiming** in Clu:
+
+- **Aim moves too little or too much:** *Aim sensitivity*. The game's own camera sensitivity
+  multiplies it too.
+- **Aim shakes:** lower *Steadiness* (Tremor section) or raise *Ignore motion slower than*.
+- **Small corrections feel too slow:** lower *Ignore motion slower than*.
+- **Hard to make the last small step onto a target:** turn on *Precision aim* (volume down)
+  for that moment, and lower *Precision aim strength* for an even finer aim.
+- **Turning around takes long:** raise *Turn speed at the edge*, or *Speed boost for fast
+  movements*.
+
+If the game has an aim assist option for touch controls, try turning it on as well.
+
+## 6. If Clu stops working
 
 These read-only `adb` commands tell apart the failure modes reported on HyperOS 3 / Android 16:
 

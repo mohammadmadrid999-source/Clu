@@ -169,7 +169,7 @@ class OverlayController(
         s.launch {
             combine(touches, engine.activeProfile) { pointers, profile -> pointers to profile }.collect { (pointers, profile) ->
                 val (w, h) = displaySize()
-                visualizer?.update(profile.joystick, profile.buttons, pointers, w, h)
+                visualizer?.update(profile.joystick, profile.aim, profile.buttons, pointers, w, h)
             }
         }
         ensureRendering()
@@ -338,8 +338,10 @@ class OverlayController(
         val profile = engine.activeProfile.value
         val (w, h) = displaySize()
         val points = buildList {
-            if (profile.joystick.mode != JoystickMode.OFF) {
-                add((profile.joystick.centerX * w).roundToInt() to (profile.joystick.centerY * h).roundToInt())
+            when (profile.joystick.mode) {
+                JoystickMode.OFF -> Unit
+                JoystickMode.AIM -> add((profile.aim.padX * w).roundToInt() to (profile.aim.padY * h).roundToInt())
+                else -> add((profile.joystick.centerX * w).roundToInt() to (profile.joystick.centerY * h).roundToInt())
             }
             profile.buttons.filter { it.enabled }.forEach { add((it.x * w).roundToInt() to (it.y * h).roundToInt()) }
         }
@@ -369,7 +371,8 @@ class OverlayController(
             )
         }
         view.joystickLabel = joystickName(profile)
-        view.update(profile.joystick, profile.buttons, touches.value, w, h)
+        view.aimLabel = ctx.getString(R.string.joystick_name_aim)
+        view.update(profile.joystick, profile.aim, profile.buttons, touches.value, w, h)
     }
 
     private fun removeVisualizer() {
@@ -390,7 +393,17 @@ class OverlayController(
 
         val (w, h) = displaySize()
         editorLinked = profile.linkedPackages.toMutableList()
-        val ed = LayoutEditorView(ctx, w, h, profile.joystick, profile.buttons.toMutableList(), joystickName(profile)) {
+        val ed = LayoutEditorView(
+            ctx,
+            w,
+            h,
+            profile.joystick,
+            profile.aim,
+            profile.usesAim,
+            profile.buttons.toMutableList(),
+            joystickName(profile),
+            ctx.getString(R.string.joystick_name_aim),
+        ) {
             updateEditorStatus()
         }
         editor = ed
@@ -480,7 +493,9 @@ class OverlayController(
         val px = (x * 100).roundToInt()
         val py = (y * 100).roundToInt()
         val b = ed.selectedButton()
-        editorStatus?.text = if (b == null) {
+        editorStatus?.text = if (ed.aimSelected) {
+            ctx.getString(R.string.editor_selected_aim, px, py)
+        } else if (b == null) {
             ctx.getString(R.string.editor_selected_stick, joystickName(engine.activeProfile.value), px, py)
         } else {
             ctx.getString(
@@ -503,9 +518,18 @@ class OverlayController(
         val ed = editor
         if (save && ed != null) {
             val joystick = ed.joystick
+            val aim = ed.aim
             val buttons = ed.buttons.toList()
             val linked = editorLinked.toList()
-            engine.updateActiveProfile { it.copy(joystick = joystick, buttons = buttons, linkedPackages = linked) }
+            // Only the layout: the mode may have been switched (move/aim) while editing.
+            engine.updateActiveProfile {
+                it.copy(
+                    joystick = it.joystick.copy(centerX = joystick.centerX, centerY = joystick.centerY, radiusFraction = joystick.radiusFraction),
+                    aim = it.aim.copy(padX = aim.padX, padY = aim.padY, padRadiusFraction = aim.padRadiusFraction),
+                    buttons = buttons,
+                    linkedPackages = linked,
+                )
+            }
         }
         removeView(root)
         editorRoot = null

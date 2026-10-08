@@ -89,6 +89,12 @@ object DeviceReport {
         appendLine("State ${engine.session.value}, profile '${profile.name}' (${profile.id})")
         val j = profile.joystick
         appendLine("Joystick ${j.mode} at (%.2f, %.2f) r=%.2f, segment ${j.segmentMs} ms, inFlight ${j.maxInFlight}".format(j.centerX, j.centerY, j.radiusFraction))
+        val a = profile.aim
+        appendLine(
+            "Aim pad (%.2f, %.2f) r=%.2f, sensitivity %.2f, precision %.2f, steady %.2f°/s, accel ×%.1f, edge %.2f at %.1f/s".format(
+                a.padX, a.padY, a.padRadiusFraction, a.sensitivity, a.precisionScale, a.steadyBelowDegPerSec, a.accelerationMax, a.edgeTurnFrom, a.edgeTurnSpeed,
+            ),
+        )
         appendLine("Filter ${profile.filter.type} minCutoff ${profile.filter.minCutoffHz} beta ${profile.filter.beta}; axes ${profile.axes.mode}")
 
         appendLine("\n-- Injection test --")

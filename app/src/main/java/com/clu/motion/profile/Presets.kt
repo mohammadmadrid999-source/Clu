@@ -10,8 +10,9 @@ object Presets {
     const val LIMITED_RANGE = "preset.limited_range"
     const val HEAD = "preset.head"
     const val WHEELCHAIR = "preset.wheelchair"
+    const val SHOOTER = "preset.shooter"
 
-    fun all(): List<ControlProfile> = listOf(handheld(), tremor(), limitedRange(), head(), wheelchair())
+    fun all(): List<ControlProfile> = listOf(handheld(), tremor(), limitedRange(), head(), wheelchair(), shooter())
 
     /** Phone held in the hands; tray/steering-wheel tilting. */
     fun handheld() = ControlProfile(id = HANDHELD, name = "Handheld tilt")
@@ -56,5 +57,31 @@ object Presets {
         filter = FilterConfig(minCutoffHz = 0.7, beta = 0.03, spasmSpeedDegPerSec = 300.0),
         response = ResponseConfig(deadzoneDeg = 2.5),
         safety = SafetyConfig(impactG = 5.0, erraticRmsDegPerSec = 260.0),
+    )
+
+    /**
+     * Shooters: tilt aims with gyro aim on the look pad, and switches to walking on demand.
+     * Twist right (or a sound, Space, volume up) fires button A; twist left (or Enter, the headset
+     * button) switches between aiming and walking; volume down toggles precision aim. Dwell is off
+     * because holding a tilt at the edge turns the view.
+     */
+    fun shooter() = ControlProfile(
+        id = SHOOTER,
+        name = "Shooter aim",
+        axes = AxisConfig(fullTiltDeg = 15.0),
+        filter = FilterConfig(minCutoffHz = 0.7, beta = 0.03, derivativeCutoffHz = 0.8, spasmSpeedDegPerSec = 300.0),
+        response = ResponseConfig(deadzoneDeg = 2.0, curve = CurveType.LINEAR),
+        joystick = JoystickConfig(mode = JoystickMode.AIM),
+        dwell = DwellConfig(enabled = false),
+        bindings = listOf(
+            TriggerBinding(TriggerKind.TWIST_RIGHT, ActionType.TAP_BUTTON, buttonId = 1),
+            TriggerBinding(TriggerKind.TWIST_LEFT, ActionType.SWITCH_MOVE_AIM),
+            TriggerBinding(TriggerKind.SOUND_CLICK, ActionType.TAP_BUTTON, buttonId = 1),
+            TriggerBinding(TriggerKind.KEY, ActionType.HOLD_BUTTON, buttonId = 1, keyCode = TriggerBinding.KEYCODE_SPACE),
+            TriggerBinding(TriggerKind.KEY, ActionType.SWITCH_MOVE_AIM, keyCode = TriggerBinding.KEYCODE_ENTER),
+            TriggerBinding(TriggerKind.KEY, ActionType.HOLD_BUTTON, buttonId = 1, keyCode = TriggerBinding.KEYCODE_VOLUME_UP),
+            TriggerBinding(TriggerKind.KEY, ActionType.TOGGLE_PRECISION, keyCode = TriggerBinding.KEYCODE_VOLUME_DOWN),
+            TriggerBinding(TriggerKind.KEY, ActionType.SWITCH_MOVE_AIM, keyCode = TriggerBinding.KEYCODE_HEADSETHOOK),
+        ),
     )
 }

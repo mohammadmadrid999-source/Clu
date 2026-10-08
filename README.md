@@ -15,6 +15,10 @@ tremor-prone conditions.
   range of motion in each direction, and full speed needs only 70 % of it.
 - **Small movements, full range.** Deadzone without a jump at its edge, power and S-curves,
   game-deadzone compensation, and direction snapping or 4/8-way output.
+- **Precise aiming for shooters.** Gyro aim: the aim follows how far you move, not how far you
+  tilt, and stops when you stop, so slow or imprecise movement doesn't overshoot. Small
+  corrections are smoothed against tremor, a precision toggle works like a scope, and one trigger
+  switches between walking and aiming.
 - **Hands-free actions.** Dwell (hold a direction), flicks and twists, switch interfaces, volume
   and headset keys, and an optional mouth-click sound trigger, all bindable to tap, hold or toggle
   on-screen buttons, or to recenter, pause and profile switching.

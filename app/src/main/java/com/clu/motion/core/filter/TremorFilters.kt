@@ -188,6 +188,9 @@ class SpasmGate(
     var holding = false
         private set
 
+    /** Holding or gliding back: the output is not following the input. */
+    val engaged get() = state != State.PASS
+
     private enum class State { PASS, HOLD, GLIDE }
 
     private var state = State.PASS

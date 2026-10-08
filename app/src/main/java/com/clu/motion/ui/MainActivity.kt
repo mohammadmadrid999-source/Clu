@@ -269,7 +269,12 @@ class MainActivity : ComponentActivity() {
         ) { p, v -> p.copy(response = p.response.copy(outputMode = v)) }
         choice(
             R.string.label_joystick_mode,
-            listOf(JoystickMode.STICK to R.string.joystick_stick, JoystickMode.CAMERA_DRAG to R.string.joystick_camera, JoystickMode.OFF to R.string.joystick_off),
+            listOf(
+                JoystickMode.STICK to R.string.joystick_stick,
+                JoystickMode.AIM to R.string.joystick_aim,
+                JoystickMode.CAMERA_DRAG to R.string.joystick_camera,
+                JoystickMode.OFF to R.string.joystick_off,
+            ),
             { it.joystick.mode },
         ) { p, v -> p.copy(joystick = p.joystick.copy(mode = v)) }
         slider(R.string.label_camera_speed, 200.0, 4000.0, 50.0, { getString(R.string.fmt_px_per_s, it) }, { it.joystick.cameraSpeedPxPerSec }) { p, v ->
@@ -280,6 +285,30 @@ class MainActivity : ComponentActivity() {
         }
         toggle(R.string.label_hold_center, { it.joystick.holdAtCenter }) { p, v -> p.copy(joystick = p.joystick.copy(holdAtCenter = v)) }
         toggle(R.string.label_magnetometer, { it.sensor.useMagnetometer }) { p, v -> p.copy(sensor = p.sensor.copy(useMagnetometer = v)) }
+
+        heading(R.string.section_aim)
+        body(getString(R.string.aim_explainer))
+        slider(R.string.label_aim_sensitivity, 0.1, 2.0, 0.05, { percent(it) }, { it.aim.sensitivity }) { p, v ->
+            p.copy(aim = p.aim.copy(sensitivity = v))
+        }
+        slider(R.string.label_aim_precision, 0.1, 1.0, 0.05, { percent(it) }, { it.aim.precisionScale }) { p, v ->
+            p.copy(aim = p.aim.copy(precisionScale = v))
+        }
+        slider(R.string.label_aim_steady, 0.0, 6.0, 0.25, { if (it == 0.0) getString(R.string.off) else getString(R.string.fmt_deg_per_s_fine, it) }, {
+            it.aim.steadyBelowDegPerSec
+        }) { p, v -> p.copy(aim = p.aim.copy(steadyBelowDegPerSec = v)) }
+        slider(R.string.label_aim_accel, 1.0, 4.0, 0.1, { if (it <= 1.0) getString(R.string.off) else getString(R.string.fmt_times, it) }, {
+            it.aim.accelerationMax
+        }) { p, v -> p.copy(aim = p.aim.copy(accelerationMax = v)) }
+        slider(R.string.label_aim_edge, 0.0, 0.95, 0.05, { if (it == 0.0) getString(R.string.off) else percent(it) }, { it.aim.edgeTurnFrom }) { p, v ->
+            p.copy(aim = p.aim.copy(edgeTurnFrom = v))
+        }
+        slider(R.string.label_aim_edge_speed, 0.2, 5.0, 0.1, { getString(R.string.fmt_per_s, it) }, { it.aim.edgeTurnSpeed }) { p, v ->
+            p.copy(aim = p.aim.copy(edgeTurnSpeed = v))
+        }
+        slider(R.string.label_aim_idle, 300.0, 5000.0, 100.0, { getString(R.string.fmt_ms, it) }, { it.aim.releaseAfterIdleMs.toDouble() }) { p, v ->
+            p.copy(aim = p.aim.copy(releaseAfterIdleMs = v.toLong()))
+        }
 
         heading(R.string.section_tremor)
         choice(
@@ -628,6 +657,8 @@ class MainActivity : ComponentActivity() {
         add(ActionOption(ActionType.BACK, 0, getString(R.string.action_back)))
         add(ActionOption(ActionType.HOME, 0, getString(R.string.action_home)))
         add(ActionOption(ActionType.RECENTS, 0, getString(R.string.action_recents)))
+        add(ActionOption(ActionType.SWITCH_MOVE_AIM, 0, getString(R.string.action_switch_move_aim)))
+        add(ActionOption(ActionType.TOGGLE_PRECISION, 0, getString(R.string.action_precision)))
     }
 
     private fun TriggerKind.label() = when (this) {

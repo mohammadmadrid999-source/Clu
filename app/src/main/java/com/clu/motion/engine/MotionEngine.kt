@@ -21,6 +21,7 @@ import com.clu.motion.input.InputDispatcherService
 import com.clu.motion.profile.ActionType
 import com.clu.motion.profile.AxisMode
 import com.clu.motion.profile.ControlProfile
+import com.clu.motion.profile.JoystickMode
 import com.clu.motion.profile.Presets
 import com.clu.motion.profile.ProfileRepository
 import com.clu.motion.profile.ProfileState
@@ -122,6 +123,11 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
     /** Non-null while the synthetic injection test drives the virtual stick instead of sensors. */
     val selfTest: StateFlow<SelfTest?> = _selfTest.asStateFlow()
 
+    private val _precisionAim = MutableStateFlow(false)
+
+    /** Precision aim (reduced aim sensitivity), per session. */
+    val precisionAim: StateFlow<Boolean> = _precisionAim.asStateFlow()
+
     private val acoustic = AcousticClickTrigger(
         app,
         onClick = { onTrigger(TriggerKind.SOUND_CLICK, 0, TriggerPhase.PULSE) },
@@ -171,6 +177,7 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
         if (_session.value != SessionState.Stopped) return@onMain
         val profile = activeProfile.value
         stickLocked = true
+        _precisionAim.value = false
         processor.start(profile)
         processor.recalibrate()
         processor.resetSafetySession()
@@ -242,6 +249,26 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
         stickLocked = true
         processor.recalibrate()
         notice(R.string.notice_calibrating)
+    }
+
+    /**
+     * Switches what tilt drives between the movement stick and gyro aim, so one motion can both
+     * walk and aim in shooters. Saved in the profile. The stick stays released until the next
+     * neutral, so switching while tilted never lurches the character.
+     */
+    fun switchMoveAim() {
+        val toAim = activeProfile.value.joystick.mode != JoystickMode.AIM
+        stickLocked = true
+        updateActiveProfile { it.copy(joystick = it.joystick.copy(mode = if (toAim) JoystickMode.AIM else JoystickMode.STICK)) }
+        notice(if (toAim) R.string.notice_aiming else R.string.notice_moving)
+    }
+
+    /** Thread-safe. */
+    fun togglePrecisionAim() {
+        val on = !_precisionAim.value
+        _precisionAim.value = on
+        processor.setPrecisionAim(on)
+        notice(if (on) R.string.notice_precision_on else R.string.notice_precision_off)
     }
 
     /** Guided range-of-motion learning; the result is saved into the active profile. */
@@ -385,6 +412,10 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
             return
         }
 
+        // While aiming, holding a tilt at the edge turns the view; it must not also dwell-trigger.
+        // Releases still pass so a button held by an earlier dwell can never stick.
+        if (kind.isDwell && phase == TriggerPhase.PRESS && profile.joystick.mode == JoystickMode.AIM) return
+
         val binding = profile.bindings.firstOrNull { it.matches(kind, keyCode) } ?: return
         val active = state == SessionState.Active
         val start = phase != TriggerPhase.RELEASE
@@ -397,6 +428,8 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
             ActionType.BACK -> if (start) send(TouchCommand.Global(AccessibilityService.GLOBAL_ACTION_BACK))
             ActionType.HOME -> if (start) send(TouchCommand.Global(AccessibilityService.GLOBAL_ACTION_HOME))
             ActionType.RECENTS -> if (start) send(TouchCommand.Global(AccessibilityService.GLOBAL_ACTION_RECENTS))
+            ActionType.SWITCH_MOVE_AIM -> if (start) switchMoveAim()
+            ActionType.TOGGLE_PRECISION -> if (start) togglePrecisionAim()
             ActionType.TAP_BUTTON -> if (active && start) send(TouchCommand.Tap(id))
             ActionType.TOGGLE_BUTTON -> if (active && start) send(TouchCommand.Toggle(id))
             ActionType.HOLD_BUTTON -> when (phase) {

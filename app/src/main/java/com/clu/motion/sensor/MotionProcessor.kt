@@ -93,6 +93,8 @@ class MotionProcessor(
 
     fun resetSafetySession() = session?.post { pipeline.resetSafetySession() }
 
+    fun setPrecisionAim(on: Boolean) = session?.post { pipeline.precisionAim = on }
+
     /** Live play vs paused: paused still tracks motion (HUD, hands-free resume) but not safety. */
     fun setActive(active: Boolean) = session?.post {
         pipeline.active = active

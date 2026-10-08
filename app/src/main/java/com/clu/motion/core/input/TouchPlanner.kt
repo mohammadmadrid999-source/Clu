@@ -1,9 +1,11 @@
 package com.clu.motion.core.input
 
 import com.clu.motion.core.response.StickOutput
+import com.clu.motion.profile.AimConfig
 import com.clu.motion.profile.JoystickConfig
 import com.clu.motion.profile.JoystickMode
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -256,38 +258,74 @@ class TouchPlanner(
     }
 }
 
+/** Cumulative gyro aim from the pipeline (MotionFrame.aimX/aimY), in whole-range units. */
+data class AimSample(val x: Double, val y: Double, val precision: Boolean = false)
+
 /**
- * Turns the virtual-stick output into the joystick pointer's touch path.
+ * Turns the virtual-stick output (and, for [JoystickMode.AIM], the gyro aim) into the joystick
+ * pointer's touch path.
  *
  * STICK: touch down at the anchor first (floating joysticks take their centre from the down
  * point), then drag to anchor + deflection × radius; lift after resting at neutral.
- * CAMERA_DRAG: rate control — deflection sets finger velocity; at the pad edge the finger lifts
- * and re-centres, like a thumb re-gripping a look pad.
+ * CAMERA_DRAG: rate control. Deflection sets the finger's velocity.
+ * AIM: the finger moves by as much as the device turned (sensitivity × short screen side per
+ * whole-range movement), and keeps turning while tilted beyond the edge-turn threshold.
+ *
+ * Both look-pad modes accumulate motion in sub-pixel precision and only move the finger by whole
+ * pixels (slow aim is never rounded away). At the pad edge the finger lifts and re-grips at the
+ * centre, like a thumb on a look pad, and motion during the re-grip is carried over, not lost.
  */
-class JoystickDriver(var config: JoystickConfig) {
+class JoystickDriver(var config: JoystickConfig, var aim: AimConfig = AimConfig()) {
     private var lastActiveAt = Long.MIN_VALUE / 2
     private var lastUpdate = -1L
-    private var camX = 0.0
-    private var camY = 0.0
+    private var mode: JoystickMode? = null
 
-    fun update(stick: StickOutput, live: Boolean, now: Long, width: Int, height: Int, planner: TouchPlanner) {
+    // Look pad (CAMERA_DRAG, AIM): finger position and motion not yet applied, in pixels.
+    private var fingerX = 0.0
+    private var fingerY = 0.0
+    private var pendingX = 0.0
+    private var pendingY = 0.0
+    private var gripMoved = false
+    private var lastAim: AimSample? = null
+    private var lastAimMotionAt = Long.MIN_VALUE / 2
+
+    /**
+     * @param aimSample the newest cumulative aim; null when there is none (no session, stick
+     *   locked), which re-anchors so the next sample causes no jump.
+     */
+    fun update(
+        stick: StickOutput,
+        live: Boolean,
+        now: Long,
+        width: Int,
+        height: Int,
+        planner: TouchPlanner,
+        aimSample: AimSample? = null,
+    ) {
         val dtSec = if (lastUpdate < 0) 0.0 else (now - lastUpdate).coerceIn(0, 50) / 1000.0
         lastUpdate = now
         val key = TouchPlanner.JOYSTICK_KEY
+        if (mode != config.mode) {
+            // Stick and aim pad are different places: never drag a held finger across.
+            if (planner.has(key)) planner.release(key)
+            mode = config.mode
+            resetPad()
+        }
         if (!live || config.mode == JoystickMode.OFF) {
             if (planner.has(key)) planner.release(key)
             lastActiveAt = Long.MIN_VALUE / 2
+            resetPad()
             return
         }
         val minDim = min(width, height).toDouble()
-        val radius = config.radiusFraction * minDim
-        val ax = config.centerX * width
-        val ay = config.centerY * height
         if (!stick.isNeutral) lastActiveAt = now
         val withinRelease = now - lastActiveAt < config.releaseAfterNeutralMs
 
         when (config.mode) {
             JoystickMode.STICK -> {
+                val radius = config.radiusFraction * minDim
+                val ax = config.centerX * width
+                val ay = config.centerY * height
                 if (stick.isNeutral && !withinRelease && !config.holdAtCenter) {
                     if (planner.has(key)) planner.release(key)
                     return
@@ -302,27 +340,115 @@ class JoystickDriver(var config: JoystickConfig) {
             }
 
             JoystickMode.CAMERA_DRAG -> {
-                if (stick.isNeutral) {
-                    if (!withinRelease && planner.has(key)) planner.release(key)
+                if (stick.isNeutral && !withinRelease) {
+                    if (planner.has(key)) planner.release(key)
+                    pendingX = 0.0
+                    pendingY = 0.0
                     return
                 }
-                if (!planner.has(key)) {
-                    camX = ax
-                    camY = ay
-                    planner.press(key, ax.roundToInt(), ay.roundToInt(), now = now)
+                val scale = if (aimSample?.precision == true) aim.precisionScale else 1.0
+                pendingX += stick.x * config.cameraSpeedPxPerSec * scale * dtSec
+                pendingY += stick.y * config.cameraSpeedPxPerSec * scale * dtSec
+                drivePad(key, planner, now, config.centerX * width, config.centerY * height, config.radiusFraction * minDim, width, height)
+            }
+
+            JoystickMode.AIM -> {
+                val unitPx = aim.sensitivity * minDim
+                var dx = 0.0
+                var dy = 0.0
+                val previous = lastAim
+                if (aimSample != null && previous != null) {
+                    dx = (aimSample.x - previous.x) * unitPx
+                    dy = (aimSample.y - previous.y) * unitPx
+                }
+                lastAim = aimSample
+                // Edge turn: a tilt held beyond the threshold keeps turning the view.
+                val mag = stick.magnitude
+                val from = aim.edgeTurnFrom
+                if (from > 0 && from < 1 && mag > from) {
+                    val excess = ((mag - from) / (1 - from)).coerceIn(0.0, 1.0)
+                    val scale = if (aimSample?.precision == true) aim.precisionScale else 1.0
+                    val speed = aim.edgeTurnSpeed * unitPx * excess * scale
+                    dx += stick.x / mag * speed * dtSec
+                    dy += stick.y / mag * speed * dtSec
+                }
+                pendingX += dx
+                pendingY += dy
+                if (planner.has(key) && !planner.isLifting(key) && now - lastAimMotionAt >= aim.releaseAfterIdleMs) {
+                    planner.release(key) // resting: free the pad; the next move re-grips at the centre
                     return
                 }
-                if (planner.isLifting(key)) return
-                camX += stick.x * config.cameraSpeedPxPerSec * dtSec
-                camY += stick.y * config.cameraSpeedPxPerSec * dtSec
-                if (abs(camX - ax) > radius || abs(camY - ay) > radius) {
-                    planner.release(key) // re-grip at the centre on a later tick
-                    return
+                // Resting means the finger hasn't moved a pixel: very slow aim still counts as aiming.
+                if (drivePad(key, planner, now, aim.padX * width, aim.padY * height, aim.padRadiusFraction * minDim, width, height)) {
+                    lastAimMotionAt = now
                 }
-                planner.moveTo(key, camX.roundToInt(), camY.roundToInt())
             }
 
             JoystickMode.OFF -> Unit
         }
+    }
+
+    /**
+     * Applies pending look-pad motion: press at the centre, drag, re-grip at the pad edge.
+     * @return true if the finger was pressed, moved, or is being pushed against the screen edge.
+     */
+    private fun drivePad(key: Int, planner: TouchPlanner, now: Long, ax: Double, ay: Double, radius: Double, width: Int, height: Int): Boolean {
+        if (!planner.has(key)) {
+            if (hypot(pendingX, pendingY) < PAD_START_PX) return false // too little to be worth a touch yet
+            fingerX = ax.roundToInt().toDouble().coerceIn(EDGE_MARGIN_PX, width - 1 - EDGE_MARGIN_PX)
+            fingerY = ay.roundToInt().toDouble().coerceIn(EDGE_MARGIN_PX, height - 1 - EDGE_MARGIN_PX)
+            gripMoved = false
+            planner.press(key, fingerX.toInt(), fingerY.toInt(), now = now)
+            return true // the motion is applied once the finger is down
+        }
+        if (planner.isLifting(key)) return false // re-gripping: keep accumulating
+        // Apply at most half a pad per tick, so a fresh grip always moves before it can re-grip.
+        val maxStep = (radius * 0.5).coerceAtLeast(1.0)
+        val stepX = pendingX.coerceIn(-maxStep, maxStep)
+        val stepY = pendingY.coerceIn(-maxStep, maxStep)
+        var nx = fingerX + stepX
+        var ny = fingerY + stepY
+        var pushing = false
+        val minX = maxOf(ax - radius, EDGE_MARGIN_PX)
+        val maxX = minOf(ax + radius, width - 1 - EDGE_MARGIN_PX)
+        val minY = maxOf(ay - radius, EDGE_MARGIN_PX)
+        val maxY = minOf(ay + radius, height - 1 - EDGE_MARGIN_PX)
+        if (nx < minX || nx > maxX || ny < minY || ny > maxY) {
+            if (gripMoved) {
+                planner.release(key) // lift here; the motion carries over to the new grip
+                return true
+            }
+            // A fresh grip with no room this way (a pad at the screen edge): re-gripping would
+            // only tap. Drop the motion that can't be applied instead.
+            pushing = true // still aiming: don't let go as if resting
+            nx = nx.coerceIn(minOf(minX, fingerX), maxOf(maxX, fingerX))
+            ny = ny.coerceIn(minOf(minY, fingerY), maxOf(maxY, fingerY))
+            pendingX = nx - fingerX
+            pendingY = ny - fingerY
+        }
+        // Whole pixels only: the fraction stays pending, so slow motion adds up instead of vanishing.
+        val tx = nx.roundToInt()
+        val ty = ny.roundToInt()
+        val moved = tx.toDouble() != fingerX || ty.toDouble() != fingerY
+        pendingX -= tx - fingerX
+        pendingY -= ty - fingerY
+        fingerX = tx.toDouble()
+        fingerY = ty.toDouble()
+        if (moved) gripMoved = true
+        planner.moveTo(key, tx, ty)
+        return moved || pushing
+    }
+
+    private fun resetPad() {
+        pendingX = 0.0
+        pendingY = 0.0
+        lastAim = null
+        lastAimMotionAt = Long.MIN_VALUE / 2
+    }
+
+    private companion object {
+        /** Pending motion needed before a new touch goes down. */
+        const val PAD_START_PX = 2.0
+        const val EDGE_MARGIN_PX = 2.0
     }
 }

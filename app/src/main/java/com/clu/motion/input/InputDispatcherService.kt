@@ -21,6 +21,7 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.core.content.edit
 import com.clu.motion.CluApp
 import com.clu.motion.core.PipelinePhase
+import com.clu.motion.core.input.AimSample
 import com.clu.motion.core.input.JoystickDriver
 import com.clu.motion.core.input.PointerSnapshot
 import com.clu.motion.core.input.TouchPlanner
@@ -31,6 +32,7 @@ import com.clu.motion.engine.SessionState
 import com.clu.motion.engine.TouchCommand
 import com.clu.motion.overlay.OverlayController
 import com.clu.motion.profile.ControlProfile
+import com.clu.motion.profile.JoystickMode
 import com.clu.motion.ui.InjectionTestActivity
 import com.clu.motion.ui.MainActivity
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -231,6 +233,7 @@ class InputDispatcherService : AccessibilityService() {
         planner.segmentMs = profile.joystick.segmentMs
         planner.maxInFlight = profile.joystick.maxInFlight
         joystick.config = profile.joystick
+        joystick.aim = profile.aim
 
         val selfTest = engine.selfTest.value
         val live = if (selfTest != null) {
@@ -249,19 +252,27 @@ class InputDispatcherService : AccessibilityService() {
         if (!live) planner.releaseAll()
 
         var stick: StickOutput
+        var aim: AimSample? = null
         if (selfTest != null) {
             stick = if (live) selfTest.stick(now) else StickOutput.ZERO
+            if (live && profile.joystick.mode == JoystickMode.AIM) {
+                // Gyro aim follows position: the synthetic circle becomes a circle on the aim pad.
+                aim = AimSample(stick.x * SELF_TEST_AIM_SCALE, stick.y * SELF_TEST_AIM_SCALE)
+                stick = StickOutput.ZERO
+            }
             val tap = selfTest.tapIndex(now)
             if (live && tap > 0 && tap != lastSelfTestTap) handle(TouchCommand.Tap(selfTest.tapButtonId), profile, true, now)
             lastSelfTestTap = tap
         } else {
             stick = if (live) StickOutput(frame.stickX.toDouble(), frame.stickY.toDouble()) else StickOutput.ZERO
+            if (live) aim = AimSample(frame.aimX, frame.aimY, frame.precisionAim)
+            // A locked stick holds the stick and the aim's edge turn; relative aim never lurches.
             if (engine.stickLocked) {
                 if (live && stick.isNeutral) engine.stickLocked = false
                 stick = StickOutput.ZERO
             }
         }
-        joystick.update(stick, live, now, w, h, planner)
+        joystick.update(stick, live, now, w, h, planner, aim)
         streamer?.pump(now, frameAgeMs = if (selfTest == null && live) now - frame.uptimeMs else null)
 
         if (publishTouches) {
@@ -343,6 +354,7 @@ class InputDispatcherService : AccessibilityService() {
         private const val MAX_TICK_MS = 50L
         private const val IDLE_TICK_MS = 50L
         private const val BUTTON_KEY_BASE = 100
+        private const val SELF_TEST_AIM_SCALE = 0.4
 
         private val _connected = MutableStateFlow(false)
 

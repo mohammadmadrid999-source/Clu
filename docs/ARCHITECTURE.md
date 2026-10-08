@@ -46,16 +46,17 @@ flowchart LR
 | Component | File | Responsibility |
 |---|---|---|
 | `MotionProcessor` | `sensor/MotionProcessor.kt` | Sensor selection and fallback, sensor thread, display-rotation tracking, publishing frames |
-| `MotionPipeline` | `core/MotionPipeline.kt` | Per-sample DSP: neutral → control axes → spasm gate → tremor filter → response curve → stick; dwell, flick and safety detectors |
+| `MotionPipeline` | `core/MotionPipeline.kt` | Per-sample DSP: neutral → control axes → spasm gate → tremor filter → response curve → stick; gyro aim; dwell, flick and safety detectors |
+| `AimProcessor` | `core/aim/AimProcessor.kt` | Gyro aim: change in filtered tilt → aim displacement (per-side range units, tiered smoothing, tightening, precision) |
 | `MotionEngine` | `engine/MotionEngine.kt` | Session lifecycle (Stopped / Active / Paused), trigger → action routing, key filter, notices, profiles |
 | `InputDispatcherService` | `input/InputDispatcherService.kt` | Accessibility service: injection tick, key filtering, foreground-app gate, hosts the overlay |
-| `TouchPlanner` + `JoystickDriver` | `core/input/TouchPlanner.kt` | Pure multi-touch planner (stroke continuation rules, back-pressure, taps, camera re-grip) |
+| `TouchPlanner` + `JoystickDriver` | `core/input/TouchPlanner.kt` | Pure multi-touch planner (stroke continuation rules, back-pressure, taps); stick, camera and aim-pad finger paths with re-grip |
 | `GestureStreamer` | `input/GestureStreamer.kt` | Turns plans into `StrokeDescription.continueStroke` chains and dispatches them |
 | `OverlayController` | `overlay/OverlayController.kt` | `TYPE_ACCESSIBILITY_OVERLAY` HUD, touch visualizer, layout editor |
 | `MotionSessionService` | `service/MotionSessionService.kt` | Foreground service (keep-alive, microphone type, notification controls) |
 | `MainActivity` | `ui/MainActivity.kt` | Setup checklist, live preview, tuning, bindings |
 
-**Why the split matters.** The whole signal chain (`core/`) has no Android imports, so 86 JVM
+**Why the split matters.** The whole signal chain (`core/`) has no Android imports, so over 100 JVM
 unit tests exercise the real filter, curve, detector, calibration and touch-planning code in
 under a second. The Android classes only move data between threads and system services.
 
@@ -92,6 +93,8 @@ rotation vector ─► quaternion q (device → world)
    ├─► tremor filter   One Euro (default) or constant-velocity Kalman
    ├─► response map    radial deadzone → per-direction range → curve → anti-deadzone → snap/digital
    │       └─► stick (x, y) ∈ unit disc  ─► dwell detector ─► DWELL_* press/release
+   ├─► gyro aim        Δ filtered tilt → per-side range units → tiered smoothing → tightening
+   │       └─► cumulative aim (x, y)       (ignores spasms until the filter has caught up)
    │
    └─► safety monitor  erratic motion, drops (accelerometer), rest timer, fatigue trend
 ```
@@ -160,6 +163,44 @@ game changes display rotation, so screen-right always stays right.
    joystick deadzone. Without it, small tilts produce nothing.
 5. **Direction snapping / digital 4- or 8-way output**, for users who find exact diagonals hard.
 
+### Gyro aim (`AimProcessor`)
+
+The first real-game test showed aiming as the main problem: with slow or imprecise movement it
+was very hard to put the crosshair on an opponent. Two causes:
+
+- **A platform bug in build 4** (rule 8 in §4). A slow camera drag moves less than a pixel per
+  frame. The rounded continuation went nowhere, Android reported it as failed, and Clu lifted and
+  re-pressed. Slow aim stuttered or did nothing.
+- **Rate control is the wrong model for fine aim.** In camera mode, tilt sets the camera *speed*.
+  To stop on a target, the tilt must come back exactly to neutral at the right moment. A slow
+  return overshoots, and an unsteady hold gives an unsteady speed. This is why console gyro aiming
+  maps rotation to displacement instead.
+
+`JoystickMode.AIM` uses that model. The aim moves only while the device moves, by as much as it
+moved, and stops when it stops. Slow, small movements give slow, small corrections, and there is
+no speed to hold. Per sensor sample, after the spasm gate and tremor filter:
+
+1. **Per-side range units.** Each axis is divided by the user's range on the side of neutral it is
+   on, so a whole-range movement is always 1 unit. Small and asymmetric ranges reach as far.
+2. **Soft tiered smoothing** (as in JoyShockMapper). Each sample's motion is split by its speed.
+   Below `smoothBelowDegPerSec` (10°/s) it goes through a moving average; above twice that it
+   passes directly; in between it is shared. Every bit of motion is emitted exactly once, so
+   smoothing adds about half a window of lag to small corrections but never overshoot. The window
+   is auto-tuned to one period of the tremor measured at calibration (clamped to 0.1–0.3 s),
+   which cancels that tremor's fundamental. Tested: 1.6° of 6 Hz tremor at rest moves the aim by
+   under 0.1°, about 2 px.
+3. **Tightening.** Below `steadyBelowDegPerSec` of smoothed speed, motion is scaled by
+   speed / threshold, so sensor drift and leftover tremor don't creep the aim. The threshold is
+   raised from the calibration's tremor speed (× 0.1, at most 4°/s).
+4. **Optional acceleration** (off by default) and **precision aim**, a toggle that scales the aim
+   down (35 %), like a scope.
+5. **Spasms are ignored.** While the spasm gate is engaged, and until the tremor filter is within
+   0.3° of the gate's output (at most 1 s), aim motion is dropped. A jerk never swings the view.
+
+The pipeline publishes the aim as a cumulative value in each `MotionFrame`. The injector
+differences consecutive frames, so a conflated frame loses nothing. Where the finger goes is
+`JoystickDriver`'s job (§4).
+
 ---
 
 ## 3. Accessibility features and where they live
@@ -177,7 +218,8 @@ game changes display rotation, so screen-right always stays right.
 | Sound click | `AcousticClickTrigger` + `ClickOnsetDetector`: ≥ 15 dB above an adaptive noise floor and ≤ 150 ms long. Speech and game audio are rejected; levels only, nothing is recorded |
 | Hands-free resume | While paused (not after a drop), dwelling in any direction resumes. After any resume the stick stays locked until it has been at neutral once, so resuming never lurches the character |
 | Safe by default | Injection is blocked in Clu's own screen, system Settings, permission/installer screens and launchers (`ForegroundAppGate`); no auto-resume after a drop; `START_NOT_STICKY`; screen-off pauses and stops the sensors |
-| Per-game profiles | Five presets (handheld, strong tremor, small movements, head/lying down, wheelchair mount). "Link game" in the layout editor auto-selects a profile when that game comes to the front |
+| Precise aiming | `AimProcessor` + `JoystickMode.AIM` (gyro aim, §2). Triggers can switch between walking and aiming (`SWITCH_MOVE_AIM`) and toggle precision aim (`TOGGLE_PRECISION`) |
+| Per-game profiles | Six presets (handheld, strong tremor, small movements, head/lying down, wheelchair mount, shooter aim). "Link game" in the layout editor auto-selects a profile when that game comes to the front. Presets added in an update appear in existing installs |
 
 Every control is reachable at least four ways: touch on the HUD, Voice Access/TalkBack (labelled
 standard buttons, live-region status), keys/switches, and notification actions. HUD buttons are
@@ -252,8 +294,20 @@ These are checked against `MotionEventInjector` / `GestureDescription` in AOSP (
   down point), then drag to `anchor + deflection × radius`. Lift after resting at neutral for
   `releaseAfterNeutralMs`, or keep holding at center (`holdAtCenter`) for games that reset the
   stick on lift.
-- **CAMERA_DRAG.** Rate control for look pads: deflection sets finger velocity. At the pad edge
-  the finger lifts and re-grips at the center, the way a thumb does.
+- **CAMERA_DRAG.** Rate control for look pads: deflection sets finger velocity.
+- **AIM.** Gyro aim on its own **aim pad**, separate from the stick so one trigger can switch
+  between walking and aiming (`SWITCH_MOVE_AIM`). The finger moves by aim × `sensitivity` × the
+  short screen side. Holding a tilt beyond `edgeTurnFrom` (80 % of the range) keeps turning, for
+  turns larger than the user's range. After `releaseAfterIdleMs` without a pixel of motion the
+  finger lets go. While aiming, dwell presses are ignored, since holding a tilt at the edge turns
+  the view.
+- **Look pads (CAMERA_DRAG, AIM).** Motion is accumulated in sub-pixel precision. The finger only
+  moves by whole pixels and the fraction stays pending, so very slow aim adds up instead of being
+  rounded away. A new touch goes down at the pad centre. At the pad edge the finger lifts and
+  re-grips at the centre, the way a thumb does, and motion during the re-grip is carried over. At
+  most half a pad is applied per frame, so a fresh grip always moves before it can re-grip. A pad
+  pushed against the screen edge drops the motion it can't apply instead of re-gripping, which
+  would only produce taps.
 - **Buttons.** Tap (timed hold counted from the actual touch-down), hold (while a key or dwell
   is held) and toggle (latched), all as extra pointers in the same gesture stream.
 
@@ -391,7 +445,7 @@ and no screen content.
 
 ## 9. Testing, verification status and limitations
 
-**Automated (JVM, `./gradlew test`, 98 tests).** Quaternion math and control axes across all
+**Automated (JVM, `./gradlew test`, 119 tests).** Quaternion math and control axes across all
 four display rotations; filters (tremor attenuation, step response, diagonal integrity, spasm
 gate); response curves (monotonic, endpoints, continuity at the deadzone, asymmetric ranges,
 digital and snapping); dwell (timing, hysteresis, tremor grace, diagonals); flick (direction,
@@ -400,7 +454,11 @@ retry); axis learning (skewed and asymmetric motion, fallback); safety (free fal
 erratic, severe-jerk clusters, rest, fatigue); the touch planner (continuation chaining,
 back-pressure coalescing, tap timing, no fresh gesture over an in-flight UP, new strokes delayed
 in continuing gestures, cancellation generations, clamping); the joystick driver (anchor
-touch-down, release, camera re-grip); real-touch recovery (Android 16); service-health states; the
+touch-down, release, camera re-grip with no lost motion); gyro aim (slow motion kept, drift and
+tremor suppressed, per-side ranges, precision, acceleration, no overshoot from smoothing, spasms
+ignored end to end) and the aim pad (sub-pixel accumulation without re-pressing, re-grip without
+lost motion, edge turn, idle release, no tap loop at the screen edge, move/aim switch); a still
+finger sends nothing (rule 8); real-touch recovery (Android 16); service-health states; the
 accessibility-service XML (`isAccessibilityTool`, no window content); injection statistics and
 the synthetic self-test; the foreground-app gate; profile JSON compatibility; and
 end-to-end pipeline scenarios (tilt to stick, lying-down neutral, resting tremor stays neutral,

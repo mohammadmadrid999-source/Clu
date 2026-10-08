@@ -94,7 +94,11 @@ class TouchTestPadView(context: Context, private val stats: InjectionStats) : Vi
         val ox = location[0].toFloat()
         val oy = location[1].toFloat()
         profile?.let { p ->
-            if (p.joystick.mode != JoystickMode.OFF) painter.drawJoystick(canvas, p.joystick, displayW, displayH, ox, oy, false, "")
+            when (p.joystick.mode) {
+                JoystickMode.OFF -> Unit
+                JoystickMode.AIM -> painter.drawAimPad(canvas, p.aim, displayW, displayH, ox, oy, false, "")
+                else -> painter.drawJoystick(canvas, p.joystick, displayW, displayH, ox, oy, false, "")
+            }
             for (b in p.buttons) if (b.enabled) painter.drawButton(canvas, b, displayW, displayH, ox, oy, false)
         }
         val now = SystemClock.uptimeMillis()

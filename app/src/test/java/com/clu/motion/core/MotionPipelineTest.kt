@@ -161,4 +161,48 @@ class MotionPipelineTest {
         p.onAcceleration(0.0, 0.0, 40.0, t * 1_000_000)
         assertTrue(events.isEmpty())
     }
+
+    @Test
+    fun gyroAimTracksSlowTiltAndIgnoresRestingTremorAndSpasms() {
+        val p = pipeline(Presets.shooter()).calibrated()
+        val start = p.feed(500) { Quaternion.IDENTITY }
+
+        // Slow tilt to the right, 3°/s for 2 s: 6° of a 15° range → 0.4 aim units.
+        val t0 = t
+        p.feed(2000) { ms -> rot(Vec3.Y, 3.0 * (ms - t0) / 1000.0) }
+        val tilted = p.feed(1500) { rot(Vec3.Y, 6.0) }
+        assertEquals(0.4, tilted.aimX - start.aimX, 0.03)
+        assertEquals(0.0, tilted.aimY - start.aimY, 0.01)
+
+        // Resting tremor (0.8° at 6 Hz) around that pose shakes the aim by a small fraction of a degree.
+        val axis = Vec3(1.0, 1.0, 0.0).normalized()
+        val shaking = (0 until 300).map { p.feed(10) { ms -> rot(Vec3.Y, 6.0) * rot(axis, 0.8 * sin(2 * PI * 6 * ms / 1000.0)) } }
+        val spread = (shaking.maxOf { it.aimX } - shaking.minOf { it.aimX }) * 15
+        assertTrue("aim shook by $spread° for 1.6° of tremor", spread < 0.1)
+
+        // A spasm throws the phone 30° further in 50 ms and it stays there: the aim must not swing.
+        val before = p.feed(200) { rot(Vec3.Y, 6.0) }
+        val t1 = t
+        p.feed(50) { ms -> rot(Vec3.Y, 6.0 + 30.0 * (ms - t1) / 50.0) }
+        val after = p.feed(1500) { rot(Vec3.Y, 36.0) }
+        assertTrue("spasm moved the aim by ${(after.aimX - before.aimX) * 15}°", abs(after.aimX - before.aimX) * 15 < 1.0)
+
+        // Deliberate motion afterwards is followed again.
+        val t2 = t
+        p.feed(1000) { ms -> rot(Vec3.Y, 36.0 - 3.0 * (ms - t2) / 1000.0) }
+        val back = p.feed(1500) { rot(Vec3.Y, 33.0) }
+        assertEquals(-3.0 / 15, back.aimX - after.aimX, 0.03)
+    }
+
+    @Test
+    fun precisionAimScalesTheAimDown() {
+        val p = pipeline(Presets.shooter()).calibrated()
+        p.precisionAim = true
+        val start = p.feed(500) { Quaternion.IDENTITY }
+        val t0 = t
+        p.feed(2000) { ms -> rot(Vec3.Y, 3.0 * (ms - t0) / 1000.0) }
+        val end = p.feed(1500) { rot(Vec3.Y, 6.0) }
+        assertTrue(end.precisionAim)
+        assertEquals(0.4 * Presets.shooter().aim.precisionScale, end.aimX - start.aimX, 0.02)
+    }
 }

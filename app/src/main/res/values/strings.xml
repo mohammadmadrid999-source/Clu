@@ -52,6 +52,10 @@
     <string name="notice_paused_layout">Paused while you edit the layout</string>
     <string name="notice_paused_error">Paused: Clu hit an internal problem. Tap Resume to carry on, and please share a device report.</string>
     <string name="notice_resumed">Resumed</string>
+    <string name="notice_aiming">Aiming: tilt moves the aim</string>
+    <string name="notice_moving">Moving: tilt moves the stick</string>
+    <string name="notice_precision_on">Precision aim on</string>
+    <string name="notice_precision_off">Precision aim off</string>
     <plurals name="notice_rest_reminder">
         <item quantity="one">You have played for %1$d minute. Maybe take a short break?</item>
         <item quantity="other">You have played for %1$d minutes. Maybe take a short break?</item>
@@ -67,6 +71,7 @@
     <!-- Layout editor -->
     <string name="joystick_name_stick">Stick</string>
     <string name="joystick_name_camera">Camera pad</string>
+    <string name="joystick_name_aim">Aim pad</string>
     <string name="editor_next">Next</string>
     <string name="editor_nudge_left">Move left</string>
     <string name="editor_nudge_up">Move up</string>
@@ -83,6 +88,7 @@
     <string name="editor_on">on</string>
     <string name="editor_off">off</string>
     <string name="editor_selected_stick">Selected: %1$s at %2$d%% across, %3$d%% down. Drag it onto the game\'s stick, or use the arrows.</string>
+    <string name="editor_selected_aim">Selected: aim pad at %1$d%% across, %2$d%% down. Drag it onto the game\'s empty look area (usually the right half), away from buttons, or use the arrows.</string>
     <string name="editor_selected_button">Selected: button %1$s (%2$s) at %3$d%% across, %4$d%% down.</string>
 
     <!-- Notification -->
@@ -145,6 +151,8 @@
     <string name="action_back">Back</string>
     <string name="action_home">Home</string>
     <string name="action_recents">Recent apps</string>
+    <string name="action_switch_move_aim">Switch moving / aiming</string>
+    <string name="action_precision">Precision aim on/off</string>
     <string name="profile_copy_name">%1$s (copy)</string>
 
     <string name="label_profile">Profile</string>
@@ -173,9 +181,21 @@
     <string name="joystick_stick">A joystick</string>
     <string name="joystick_camera">A camera / look pad</string>
     <string name="joystick_off">Nothing (actions only)</string>
+    <string name="joystick_aim">Aiming (gyro aim, most precise)</string>
     <string name="label_camera_speed">Camera speed</string>
     <string name="label_release_after">Let go of the stick after resting</string>
     <string name="label_hold_center">Keep the stick held at center</string>
+    <string name="section_aim">Aiming</string>
+    <string name="aim_explainer">For shooters. Choose \"Aiming\" under Motion controls, then put the aim pad on the game\'s look area with Layout. The aim moves only while you move, by as much as you move, and stops when you stop. Slow, small movements give slow, small aim corrections, and there is no speed to hold steady. Bind \"Switch moving / aiming\" to a twist, a sound or a switch to walk and aim with the same motion, and \"Precision aim\" for fine adjustments on a target.</string>
+    <string name="label_aim_sensitivity">Aim sensitivity (screen travel for your full movement)</string>
+    <string name="label_aim_precision">Precision aim strength</string>
+    <string name="label_aim_steady">Ignore motion slower than</string>
+    <string name="label_aim_accel">Speed boost for fast movements</string>
+    <string name="label_aim_edge">Keep turning when tilted beyond</string>
+    <string name="label_aim_edge_speed">Turn speed at the edge</string>
+    <string name="label_aim_idle">Let go of the aim pad after resting</string>
+    <string name="fmt_times">×%1$.1f</string>
+    <string name="fmt_per_s">%1$.1f per s</string>
     <string name="label_magnetometer">Use compass to stop slow turning drift</string>
     <string name="label_filter">Smoothing method</string>
     <string name="filter_one_euro">Adaptive (recommended)</string>
@@ -222,6 +242,7 @@
     <string name="fmt_label_value">%1$s: %2$s</string>
     <string name="fmt_degrees">%1$.1f°</string>
     <string name="fmt_deg_per_s">%1$.0f°/s</string>
+    <string name="fmt_deg_per_s_fine">%1$.2f°/s</string>
     <string name="fmt_hz">%1$.2f Hz</string>
     <string name="fmt_ms">%1$.0f ms</string>
     <string name="fmt_minutes">%1$.0f min</string>

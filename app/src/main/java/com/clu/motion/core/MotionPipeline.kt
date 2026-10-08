@@ -1,5 +1,6 @@
 package com.clu.motion.core
 
+import com.clu.motion.core.aim.AimProcessor
 import com.clu.motion.core.calibration.AxisLearner
 import com.clu.motion.core.calibration.CalibrationCapture
 import com.clu.motion.core.calibration.CalibrationResult
@@ -68,6 +69,10 @@ data class MotionFrame(
     val dwellProgress: Float,
     val dwellDirection: Direction4?,
     val spasmHold: Boolean,
+    /** Cumulative gyro aim in whole-range units (see AimProcessor); consumers use differences. */
+    val aimX: Double = 0.0,
+    val aimY: Double = 0.0,
+    val precisionAim: Boolean = false,
 ) {
     val isNeutral get() = stickX == 0f && stickY == 0f
 
@@ -187,6 +192,9 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
     private var flickY = FlickDetector(profile.flick)
     private var flickZ = FlickDetector(profile.flick)
     private var safety = SafetyMonitor(profile.safety)
+    private val aim = AimProcessor(profile.aim)
+    private var aimSpasm = false
+    private var aimSpasmUntilMs = 0L
     private val capture = CalibrationCapture()
     private val learner = AxisLearner()
     private var learnAfterCalibration = false
@@ -204,6 +212,7 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
     init {
         applyGateConfig()
         rebuildMapper()
+        tuneAim()
     }
 
     fun setProfile(p: ControlProfile) {
@@ -224,6 +233,7 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
             flickZ = FlickDetector(p.flick)
             tuneFlicks()
         }
+        if (old.aim != p.aim) aim.config = p.aim
         if (old.safety != p.safety) {
             safety = SafetyMonitor(p.safety).also { it.setTremorBaseline(tremor.rmsDeg) }
         }
@@ -232,6 +242,7 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
             resetSignal()
         }
         rebuildMapper()
+        tuneAim()
     }
 
     fun setDisplayRotation(rotation: Int) {
@@ -270,6 +281,13 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
     }
 
     fun resetSafetySession() = safety.resetSession()
+
+    /** Precision aim: scales gyro aim down (see AimConfig.precisionScale). */
+    var precisionAim: Boolean
+        get() = aim.precision
+        set(value) {
+            aim.precision = value
+        }
 
     /** Releases a held dwell (e.g. when play pauses) so HOLD bindings don't stick. */
     fun releaseHeldTriggers() {
@@ -363,6 +381,17 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
         lastFilteredY = filter.y
         lastTwist = az
 
+        // A spasm must not swing the aim. The stick may glide to a new pose after one, but the aim
+        // ignores the jerk, the glide and the tremor filter catching up after it.
+        if (profile.filter.spasmGateEnabled && gate.engaged) {
+            aimSpasm = true
+            aimSpasmUntilMs = tMs + AIM_MAX_SPASM_SETTLE_MS
+        } else if (aimSpasm) {
+            val lag = hypot(gx - lastFilteredX, gy - lastFilteredY)
+            if (lag < AIM_SPASM_SETTLED_DEG || tMs >= aimSpasmUntilMs) aimSpasm = false
+        }
+        aim.update(lastFilteredX, lastFilteredY, tNanos / 1e9, suppressed = aimSpasm)
+
         val stick = mapper.map(lastFilteredX, lastFilteredY)
         lastStick = stick
 
@@ -386,6 +415,7 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
         safety.setTremorBaseline(tremor.rmsDeg)
         updateBasis()
         tuneFlicks()
+        tuneAim()
         rebuildMapper()
         resetSignal()
     }
@@ -403,6 +433,27 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
         val ranges = ControlBasis.ranges(profile.axes)
         rangeAverage = ranges.average
         mapper = ResponseMapper(profile.response, ranges, max(profile.response.deadzoneDeg, auto))
+        aim.ranges = ranges
+    }
+
+    /**
+     * Raises the aim's tightening threshold above the tremor left after filtering. Resting tremor
+     * speed is measured raw at calibration; the tremor filter passes roughly a tenth of it.
+     */
+    private fun tuneAim() {
+        val auto = profile.filter.autoTuneFromTremor
+        val configured = profile.aim.steadyBelowDegPerSec
+        aim.steadyBelowDegPerSec = if (auto && configured > 0) {
+            max(configured, min(tremor.speedRmsDegPerSec * AIM_STEADY_PER_TREMOR_SPEED, MAX_AUTO_AIM_STEADY_DEG_PER_SEC))
+        } else {
+            configured
+        }
+        // A moving average one tremor period long cancels that tremor's fundamental exactly.
+        aim.smoothWindowSec = if (auto && tremor.dominantHz > 0 && tremor.rmsDeg >= MIN_TREMOR_FOR_AIM_WINDOW_DEG) {
+            (1.0 / tremor.dominantHz).coerceIn(MIN_AIM_WINDOW_SEC, MAX_AIM_WINDOW_SEC)
+        } else {
+            profile.aim.smoothWindowMs / 1000.0
+        }
     }
 
     private fun tuneFlicks() {
@@ -425,6 +476,8 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
         flickX.reset()
         flickY.reset()
         flickZ.reset()
+        aim.reset()
+        aimSpasm = false
         lastOmega = null
         lastStick = StickOutput.ZERO
         lastFilteredX = 0.0
@@ -468,6 +521,9 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
             dwellProgress = if (running && profile.dwell.enabled) dwell.progress.toFloat() else 0f,
             dwellDirection = if (running) dwell.direction else null,
             spasmHold = running && gate.holding,
+            aimX = aim.x,
+            aimY = aim.y,
+            precisionAim = aim.precision,
         )
     }
 
@@ -477,5 +533,14 @@ class MotionPipeline(profile: ControlProfile, private val sink: (PipelineEvent) 
         const val MAX_AUTO_DEADZONE_DEG = 6.0
         const val FLICK_AMP_PER_TREMOR_RMS = 4.0
         const val FLICK_SPEED_PER_TREMOR_RMS = 3.0
+        const val AIM_STEADY_PER_TREMOR_SPEED = 0.1
+        const val MAX_AUTO_AIM_STEADY_DEG_PER_SEC = 4.0
+        const val MIN_TREMOR_FOR_AIM_WINDOW_DEG = 0.15
+        const val MIN_AIM_WINDOW_SEC = 0.1
+        const val MAX_AIM_WINDOW_SEC = 0.3
+        /** After a spasm, the aim resumes once the tremor filter is this close to the signal… */
+        const val AIM_SPASM_SETTLED_DEG = 0.3
+        /** …or after this long, whichever comes first. */
+        const val AIM_MAX_SPASM_SETTLE_MS = 1000L
     }
 }
