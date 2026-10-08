@@ -1,5 +1,6 @@
 package com.clu.motion.ui
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -17,6 +18,7 @@ import com.clu.motion.profile.JoystickMode
  * fading trails per pointer, with markers for DOWN (green), UP (white) and CANCEL (red).
  * Coordinates are converted to absolute display pixels, the space dispatchGesture uses.
  */
+@SuppressLint("ViewConstructor") // Created in code only, never inflated.
 class TouchTestPadView(context: Context, private val stats: InjectionStats) : View(context) {
 
     private class Dot(val x: Float, val y: Float, val t: Long, val kind: Int)

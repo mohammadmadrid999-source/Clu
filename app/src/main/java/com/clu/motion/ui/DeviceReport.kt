@@ -65,8 +65,13 @@ object DeviceReport {
         val power = activity.getSystemService(PowerManager::class.java)
         appendLine("Ignoring battery optimizations=${power.isIgnoringBatteryOptimizations(activity.packageName)}")
         appendLine("Background restricted=${activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted}")
-        appendLine("Notifications granted=${granted(activity, Manifest.permission.POST_NOTIFICATIONS, Build.VERSION_CODES.TIRAMISU)}")
-        appendLine("Microphone granted=${granted(activity, Manifest.permission.RECORD_AUDIO, 0)}")
+        val notifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            granted(activity, Manifest.permission.POST_NOTIFICATIONS).toString()
+        } else {
+            "n/a"
+        }
+        appendLine("Notifications granted=$notifications")
+        appendLine("Microphone granted=${granted(activity, Manifest.permission.RECORD_AUDIO)}")
 
         appendLine("\n-- Session --")
         val profile = engine.activeProfile.value
@@ -86,12 +91,8 @@ object DeviceReport {
         for ((sig, count) in s.signatures) appendLine("Events $sig: $count")
     }
 
-    private fun granted(activity: Activity, permission: String, minSdk: Int): String =
-        if (Build.VERSION.SDK_INT < minSdk) {
-            "n/a"
-        } else {
-            (ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED).toString()
-        }
+    private fun granted(activity: Activity, permission: String): Boolean =
+        ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
 
     private val SENSORS = listOf(
         Sensor.TYPE_GAME_ROTATION_VECTOR to "Game rotation vector",

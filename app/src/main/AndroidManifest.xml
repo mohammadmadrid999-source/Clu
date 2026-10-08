@@ -54,12 +54,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Stand-in "game" for the on-device injection self-test; landscape like most games. -->
+        <!--
+          Stand-in "game" for the on-device injection self-test; landscape like most games, so
+          layout fractions match. Android 16 ignores the lock only on large screens (sw600dp+).
+        -->
         <activity
             android:name=".ui.InjectionTestActivity"
             android:exported="false"
+            android:label="@string/test_report_title"
             android:screenOrientation="sensorLandscape"
-            android:label="@string/test_report_title" />
+            tools:ignore="DiscouragedApi" />
 
         <service
             android:name=".input.InputDispatcherService"
