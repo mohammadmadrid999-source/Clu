@@ -149,6 +149,22 @@ class TouchPlannerTest {
     }
 
     @Test
+    fun aRealTouchElsewhereRepressesHeldPointersInANewGeneration() {
+        val p = planner()
+        assertFalse("nothing held, nothing to do", p.onExternalTouch(0))
+        p.press(0, 300, 800, targetX = 380, targetY = 800, now = 0)
+        p.nextPlan(0)
+        p.onCompleted(0)
+        p.nextPlan(16) // a continuation is now in flight
+        assertTrue(p.onExternalTouch(20))
+        assertEquals(1, p.generation)
+        assertNull("waits for the real touch to finish", p.nextPlan(200))
+        val seg = p.nextPlan(330)!!.segments.single()
+        assertTrue(seg.isNewStroke)
+        assertEquals(300 to 800, seg.fromX to seg.fromY)
+    }
+
+    @Test
     fun coordinatesAreClampedToTheDisplay() {
         val p = planner()
         p.press(0, -50, 5000, now = 0)

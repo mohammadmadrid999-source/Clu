@@ -11,6 +11,9 @@ enum class PauseReason {
     REST_BREAK,
     SCREEN_OFF,
     LAYOUT_EDIT,
+
+    /** An internal error was caught; play pauses instead of the service crashing. */
+    ERROR,
     ;
 
     /** A dropped device must be picked up and resumed explicitly, never by motion alone. */

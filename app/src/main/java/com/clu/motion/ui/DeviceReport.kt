@@ -3,11 +3,14 @@ package com.clu.motion.ui
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.Context
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.PowerManager
+import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
 import com.clu.motion.engine.MotionEngine
 import com.clu.motion.input.InputDispatcherService
@@ -45,6 +48,7 @@ object DeviceReport {
         val d = display ?: wm.defaultDisplay
         appendLine("${w}x$h px, ${activity.resources.displayMetrics.densityDpi} dpi, rotation ${d.rotation}")
         appendLine("Refresh now %.1f Hz; modes: %s".format(d.refreshRate, d.supportedModes.map { "%.0f".format(it.refreshRate) }.distinct().joinToString()))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) appendLine("Adaptive refresh (ARR) supported=${d.hasArrSupport()}")
 
         appendLine("\n-- Sensors --")
         val sm = activity.getSystemService(SensorManager::class.java)
@@ -61,7 +65,14 @@ object DeviceReport {
         appendLine("Clu source: ${status.source ?: "not running"}, reliable=${status.reliable}, measured %.1f Hz".format(status.sampleRateHz))
 
         appendLine("\n-- System settings that affect Clu --")
-        appendLine("Accessibility service enabled=${InputDispatcherService.isEnabled(activity)} connected=${InputDispatcherService.connected.value}")
+        val enabled = InputDispatcherService.isEnabled(activity)
+        val connected = InputDispatcherService.connected.value
+        val everConnected = activity.getSharedPreferences(InputDispatcherService.HEALTH_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(InputDispatcherService.KEY_EVER_CONNECTED, false)
+        appendLine("Accessibility service enabled=$enabled connected=$connected everConnected=$everConnected")
+        appendLine("Seen by Android as accessibility tool=${accessibilityTool(activity)}")
+        appendLine("Install source: ${installSource(activity)}")
+        if (XiaomiSettings.isXiaomi) appendLine("Xiaomi screens opened: ${XiaomiSettings.outcomes(activity)}")
         val power = activity.getSystemService(PowerManager::class.java)
         appendLine("Ignoring battery optimizations=${power.isIgnoringBatteryOptimizations(activity.packageName)}")
         appendLine("Background restricted=${activity.getSystemService(ActivityManager::class.java).isBackgroundRestricted}")
@@ -83,12 +94,43 @@ object DeviceReport {
         appendLine("\n-- Injection test --")
         val s = engine.injectionStats.snapshot()
         appendLine("Gestures sent ${s.dispatched}, completed ${s.completed}, cancelled ${s.cancelled}, rejected ${s.rejected}, back-pressure waits ${s.backpressureSkips}")
+        appendLine("Real touches that forced a re-press: ${s.externalTouches}")
         appendLine("Received: DOWN ${s.downs}, UP ${s.ups}, CANCEL ${s.cancels}, POINTER_DOWN ${s.pointerDowns}, POINTER_UP ${s.pointerUps}, MOVE ${s.moves}, max pointers ${s.maxPointers}")
         appendLine("MOVE gap: ${s.moveGap ?: "-"}")
         appendLine("Frame age at dispatch: ${s.frameAge ?: "-"}")
         appendLine("Dispatch -> delivered: ${s.dispatchToDelivery ?: "-"}")
         appendLine("Event age at app: ${s.eventAge ?: "-"}")
         for ((sig, count) in s.signatures) appendLine("Events $sig: $count")
+    }
+
+    /** Android 16 drops injected gestures at sensitive views unless the service is an accessibility tool. */
+    private fun accessibilityTool(activity: Activity): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return "n/a (Android < 12)"
+        val am = activity.getSystemService(AccessibilityManager::class.java)
+        val ours = am.installedAccessibilityServiceList.firstOrNull { it.resolveInfo.serviceInfo.packageName == activity.packageName }
+        return ours?.isAccessibilityTool?.toString() ?: "service not found"
+    }
+
+    /** File-manager and browser installs (LOCAL_FILE / DOWNLOADED_FILE) trigger restricted settings. */
+    private fun installSource(activity: Activity): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return "n/a"
+        return try {
+            val info = activity.packageManager.getInstallSourceInfo(activity.packageName)
+            val source = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                when (info.packageSource) {
+                    PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE -> "local file"
+                    PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE -> "downloaded file"
+                    PackageInstaller.PACKAGE_SOURCE_STORE -> "store"
+                    PackageInstaller.PACKAGE_SOURCE_OTHER -> "other (e.g. adb)"
+                    else -> "unspecified"
+                }
+            } else {
+                "n/a"
+            }
+            "$source, installer=${info.installingPackageName}, initiator=${info.initiatingPackageName}"
+        } catch (e: PackageManager.NameNotFoundException) {
+            "unknown"
+        }
     }
 
     private fun granted(activity: Activity, permission: String): Boolean =

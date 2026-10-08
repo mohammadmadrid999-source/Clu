@@ -222,9 +222,21 @@ These are checked against `MotionEventInjector` / `GestureDescription` in AOSP (
 5. **A fresh (non-continuing) gesture cancels everything queued.** The planner never starts one
    while anything is in flight; otherwise a tap's `ACTION_UP` would become `ACTION_CANCEL`, which
    games ignore.
-6. **Cancellation** (a real touch on the screen, or a rejected continuation) invalidates a whole
-   generation of strokes. Pointers that should still be down re-press at their press point after
-   a 150 ms back-off. The joystick re-presses at its anchor, not mid-drag.
+6. **Cancellation** (a rejected continuation, or a real touch up to Android 15) invalidates a
+   whole generation of strokes. Pointers that should still be down re-press at their press point
+   after a 150 ms back-off. The joystick re-presses at its anchor, not mid-drag.
+7. **Android 16 changed real-touch handling and stopped telling us.** With
+   `motion_event_injector_cancel_fix` (enabled in the Android 16 release config), a real finger no
+   longer makes `MotionEventInjector` cancel the injection. Instead, InputDispatcher cancels the
+   injected stream *inside the touched window* (one device per window) and drops further
+   continued MOVEs as inconsistent, while Clu's gesture callbacks still report success. The stick
+   would look alive to Clu but be dead in the game. Clu detects this itself: the HUD window sets
+   `FLAG_WATCH_OUTSIDE_TOUCH`, ignores Clu's own injected events (they carry
+   `deviceId = KeyCharacterMap.VIRTUAL_KEYBOARD`, verified in AOSP 16), and on a real outside touch
+   `TouchPlanner.onExternalTouch` starts a new generation. Held pointers then re-press with a fresh
+   DOWN after 300 ms, long enough for a tap to finish, since re-pressing during it would cancel the
+   person's own touch. A touch on Clu's HUD is a different window and no longer breaks the drag on
+   Android 16.
 
 ### Joystick behaviour (`JoystickDriver`)
 
@@ -282,6 +294,20 @@ entirely when stopped and idle, and nothing is drawn per sensor sample.
   before anything that could `stopSelf`, because stopping a `startForegroundService` service
   before it is foreground crashes.
 - **`START_NOT_STICKY`.** A killed session must never silently come back injecting touches.
+- **Force stop switches the service off.** On Android 16, a force stop (App info, phone-cleaner
+  tools, and Xiaomi's Ultra battery saver, which force-stops apps) removes Clu from
+  `ENABLED_ACCESSIBILITY_SERVICES`. The setup screen remembers that the service once ran
+  (`ServiceHealth.TURNED_OFF`) and says so in plain words, instead of a generic "off".
+- **A crash leaves the service "enabled but not running".** Android keeps a crashed service in the
+  enabled list with nothing bound, and reports from HyperOS 3 / Android 16 say toggling doesn't
+  always recover it. Clu therefore contains errors instead of crashing. The injection tick, key
+  and window callbacks, the sensor callback, the HUD render and every coroutine scope catch and
+  log runtime exceptions, and play pauses with `PauseReason.ERROR`. The setup screen reports
+  `ServiceHealth.STUCK` when the service is enabled but unbound for more than 10 s.
+- **Xiaomi / HyperOS.** The per-app Battery saver ("No restrictions") is what exempts an app from
+  HyperOS's process freezer, not AOSP's Doze allow-list. The setup screen therefore shows a
+  Xiaomi checklist with deep links to Battery saver and Autostart, each with a fallback to App
+  info. See [POCO_X7_PRO.md](POCO_X7_PRO.md).
 - **Screen off.** Pauses, unregisters the sensors and stops the microphone. Doze does not apply
   while the screen is on, so no wake lock and no battery-optimisation exemption are needed.
 
@@ -329,12 +355,14 @@ Practices used, and why:
 |---|---|---|
 | `BIND_ACCESSIBILITY_SERVICE` | Declared on the service | Ensures only the system can bind it. The user enables it in **Settings → Accessibility**; the app shows status and a deep link |
 | Accessibility config | `canPerformGestures`, `canRequestFilterKeyEvents`, `typeWindowStateChanged`, `canRetrieveWindowContent="false"`, `isAccessibilityTool="true"` | The minimum needed: Clu knows which app is in front (package/class) but never reads screen content |
-| Restricted settings (Android 13+) | Documented in-app | Sideloaded apps can't enable accessibility until the user allows it under **App info → ⋮ → Allow restricted settings** |
+| Restricted settings (Android 13+; Enhanced Confirmation Mode on 15/16) | Guided in-app, ordered steps | APKs opened from a file manager or browser are restricted; `adb install` is not on AOSP-default configs. The **App info → ⋮ → Allow restricted settings** item only appears *after* the user has tried to enable the service and dismissed the block dialog, so the in-app text gives the three steps in order and highlights them when `InstallSourceInfo.packageSource` is a local or downloaded file |
+| `isAccessibilityTool="true"` | Declared and unit-tested | Load-bearing on Android 16: without it, injected gestures are dropped at views marked accessibility-data-sensitive (including any using `filterTouchesWhenObscured`), the service can't be enabled during calls with unknown numbers, and PermissionController keeps suggesting its removal |
 | `SYSTEM_ALERT_WINDOW` | **Not requested** | `TYPE_ACCESSIBILITY_OVERLAY` covers every overlay need, see below |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` | Requested | `specialUse` with a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` explanation, which Play Console asks you to justify. There is no dedicated "sensor" FGS type, and `health` would be a misuse |
 | `FOREGROUND_SERVICE_MICROPHONE`, `RECORD_AUDIO` | Requested; runtime prompt only when the sound trigger is enabled | Microphone FGS must be started while the app is visible |
 | `POST_NOTIFICATIONS` (13+) | Runtime prompt from the setup checklist | The FGS runs without it, but its controls would be hidden |
-| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | **Not requested** | Restricted by Play policy and unnecessary with the screen on. The app links to `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` and explains OEM "Unrestricted" battery settings instead |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | **Not requested** | Restricted by Play policy and unnecessary with the screen on. The app links to `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS`, or on Xiaomi to the per-app Battery saver, which is what HyperOS actually honours |
+| Xiaomi "Display pop-up windows" (and "…while running in the background") | **Not needed** | Accessibility overlays are gated by their own app-op (`OP_CREATE_ACCESSIBILITY_OVERLAY`), not `SYSTEM_ALERT_WINDOW`, and Clu never starts activities from the background |
 | `HIGH_SAMPLING_RATE_SENSORS` | Not needed | 100 Hz is below the 200 Hz cap |
 | `INTERNET` | **Not requested** | Motion and audio data cannot leave the device |
 | `<queries>` HOME intent | Declared | Package visibility on Android 11+, so launchers can be identified and blocked |
@@ -355,7 +383,7 @@ and no screen content.
 
 ## 9. Testing, verification status and limitations
 
-**Automated (JVM, `./gradlew test`, 86 tests).** Quaternion math and control axes across all
+**Automated (JVM, `./gradlew test`, 98 tests).** Quaternion math and control axes across all
 four display rotations; filters (tremor attenuation, step response, diagonal integrity, spasm
 gate); response curves (monotonic, endpoints, continuity at the deadzone, asymmetric ranges,
 digital and snapping); dwell (timing, hysteresis, tremor grace, diagonals); flick (direction,
@@ -364,7 +392,9 @@ retry); axis learning (skewed and asymmetric motion, fallback); safety (free fal
 erratic, severe-jerk clusters, rest, fatigue); the touch planner (continuation chaining,
 back-pressure coalescing, tap timing, no fresh gesture over an in-flight UP, new strokes delayed
 in continuing gestures, cancellation generations, clamping); the joystick driver (anchor
-touch-down, release, camera re-grip); the foreground-app gate; profile JSON compatibility; and
+touch-down, release, camera re-grip); real-touch recovery (Android 16); service-health states; the
+accessibility-service XML (`isAccessibilityTool`, no window content); injection statistics and
+the synthetic self-test; the foreground-app gate; profile JSON compatibility; and
 end-to-end pipeline scenarios (tilt to stick, lying-down neutral, resting tremor stays neutral,
 dwell, twist flick, axis learning, display rotation, drop). A mutation check confirmed that
 breaking the gravity basis sign or the in-flight rule makes tests fail.
@@ -372,11 +402,15 @@ breaking the gravity basis sign or the in-flight rule makes tests fail.
 **Not yet verified on a device.** The development environment had no hardware virtualisation,
 so the Android-side code (sensor registration, `dispatchGesture` streaming, overlays, FGS) was
 compiled and linted (Lint and an R8 release build pass) but not run. The injection rules above
-come from reading AOSP source, not from observing a device. Before relying on it, test:
+come from reading AOSP source, not from observing a device. The app ships its own verification
+kit for this: **Injection test** (a stand-in game screen with a synthetic stick-plus-taps run
+that needs no sensors) and **Share device report**. The step-by-step device procedure for the
+first target phone is in [POCO_X7_PRO.md](POCO_X7_PRO.md). Before relying on it, test:
 
 - streaming drags in a few engines (Unity, Unreal, native/GL) with fixed and floating sticks;
 - holding the stick while tapping buttons (rule 4) and releasing them;
-- a real finger touching the screen mid-drag (cancellation and re-press);
+- a real finger touching the screen mid-drag (Android ≤ 15: cancellation callback and re-press;
+  Android 16: CANCEL in the game window, then a re-press via the HUD's outside-touch watch);
 - Android 9, 12, 14 and 16, plus at least one aggressive OEM (Xiaomi, Samsung);
 - TalkBack, Voice Access and Switch Access driving the HUD.
 

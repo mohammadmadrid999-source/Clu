@@ -3,11 +3,13 @@ package com.clu.motion.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
@@ -37,6 +39,7 @@ import com.clu.motion.CluApp
 import com.clu.motion.R
 import com.clu.motion.engine.SessionState
 import com.clu.motion.input.InputDispatcherService
+import com.clu.motion.input.ServiceHealth
 import com.clu.motion.overlay.TiltIndicatorView
 import com.clu.motion.profile.ActionType
 import com.clu.motion.profile.AxisMode
@@ -80,6 +83,8 @@ class MainActivity : ComponentActivity() {
     private var learningKey = false
     private var profileIds: List<String> = emptyList()
     private var keyRowsSignature: Any? = null
+    private var restrictedNote: TextView? = null
+    private var enabledSinceMs: Long? = null
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refreshStatus() }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -151,19 +156,34 @@ class MainActivity : ComponentActivity() {
 
         heading(R.string.section_setup)
         serviceStatus = body("")
+        ViewCompat.setAccessibilityLiveRegion(serviceStatus, ViewCompat.ACCESSIBILITY_LIVE_REGION_POLITE)
         buttonRow(button(R.string.action_open_accessibility) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) })
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ "restricted settings" (Android 15/16: Enhanced Confirmation Mode).
+            restrictedNote = body("").apply { setTypeface(typeface, Typeface.BOLD) }
             body(getString(R.string.setup_restricted_settings))
             buttonRow(button(R.string.action_app_info) {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
             })
         }
+        body(getString(R.string.setup_force_stop))
         notificationStatus = body("")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             buttonRow(button(R.string.action_allow_notifications) { notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS) })
         }
-        body(getString(R.string.setup_battery))
-        buttonRow(button(R.string.action_battery_settings) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) })
+        if (XiaomiSettings.isXiaomi) {
+            // HyperOS: the per-app Battery saver is what protects Clu, not AOSP's Doze list.
+            subheading(R.string.section_xiaomi)
+            body(getString(R.string.xiaomi_checklist))
+            buttonRow(
+                button(R.string.action_xiaomi_battery) { XiaomiSettings.openBatterySaver(this) },
+                button(R.string.action_xiaomi_autostart) { XiaomiSettings.openAutostart(this) },
+            )
+            body(getString(R.string.xiaomi_game_turbo))
+        } else {
+            body(getString(R.string.setup_battery))
+            buttonRow(button(R.string.action_battery_settings) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) })
+        }
         sensorStatus = body("")
 
         subheading(R.string.section_device_check)
@@ -444,13 +464,27 @@ class MainActivity : ComponentActivity() {
     private fun refreshStatus() {
         val enabled = InputDispatcherService.isEnabled(this)
         val connected = InputDispatcherService.connected.value
+        val now = SystemClock.uptimeMillis()
+        enabledSinceMs = if (enabled && !connected) enabledSinceMs ?: now else null
+        val everConnected = getSharedPreferences(InputDispatcherService.HEALTH_PREFS, MODE_PRIVATE)
+            .getBoolean(InputDispatcherService.KEY_EVER_CONNECTED, false)
+        val health = ServiceHealth.evaluate(enabled, connected, everConnected, enabledSinceMs, now)
         serviceStatus.text = getString(
-            when {
-                connected -> R.string.setup_service_on
-                enabled -> R.string.setup_service_starting
-                else -> R.string.setup_service_off
+            when (health) {
+                ServiceHealth.RUNNING -> R.string.setup_service_on
+                ServiceHealth.STARTING -> R.string.setup_service_starting
+                ServiceHealth.STUCK -> R.string.setup_service_stuck
+                ServiceHealth.TURNED_OFF -> R.string.setup_service_turned_off
+                ServiceHealth.OFF -> R.string.setup_service_off
             },
         )
+        // Re-check once the "starting" grace period is over, so a stuck service is called out.
+        if (health == ServiceHealth.STARTING) serviceStatus.postDelayed({ refreshStatus() }, ServiceHealth.STUCK_AFTER_MS + 500)
+        restrictedNote?.let { note ->
+            val fromFile = !enabled && installedFromFile()
+            note.visibility = if (fromFile) View.VISIBLE else View.GONE
+            if (fromFile) note.setText(R.string.setup_installed_from_file)
+        }
         val notificationsOk = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         notificationStatus.text = getString(if (notificationsOk) R.string.setup_notifications_on else R.string.setup_notifications_off)
@@ -652,6 +686,17 @@ class MainActivity : ComponentActivity() {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for (b in buttons) row.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         content.addView(row, matchWrap())
+    }
+
+    /** Android 13+: APKs opened from a file manager or browser are subject to restricted settings. */
+    private fun installedFromFile(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        return try {
+            val source = packageManager.getInstallSourceInfo(packageName).packageSource
+            source == PackageInstaller.PACKAGE_SOURCE_LOCAL_FILE || source == PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
     }
 
     private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)

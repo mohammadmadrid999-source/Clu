@@ -56,6 +56,7 @@ class TouchPlanner(
     var segmentMs: Long = 16,
     var maxInFlight: Int = 2,
     private val cancelBackoffMs: Long = 150,
+    private val externalTouchBackoffMs: Long = 300,
 ) {
     private class Pointer(val key: Int) {
         var down = false
@@ -202,17 +203,37 @@ class TouchPlanner(
     /** The system cancelled a gesture of [generation] (real touch, window change, failed continuation). */
     fun onCancelled(generation: Int, now: Long) {
         if (generation != this.generation) return
-        this.generation++
+        restartGeneration(now + cancelBackoffMs)
+    }
+
+    fun onDispatchFailed(generation: Int, now: Long) = onCancelled(generation, now)
+
+    /**
+     * A real finger touched another window. From Android 16 (motion_event_injector_cancel_fix)
+     * the platform no longer cancels our injection for this: InputDispatcher instead cancels the
+     * injected stream inside the touched window and silently drops our continued MOVEs, while the
+     * gesture callbacks still report success. So start a new generation ourselves: queued
+     * continuations are abandoned and every held pointer re-presses with a fresh DOWN once the
+     * real touch has had time to finish (a re-press during it would cancel the person's touch).
+     *
+     * @return true if anything was held and will be re-pressed.
+     */
+    fun onExternalTouch(now: Long): Boolean {
+        if (pointers.isEmpty()) return false
+        restartGeneration(now + externalTouchBackoffMs)
+        return true
+    }
+
+    private fun restartGeneration(resumeAt: Long) {
+        generation++
         inFlight = 0
-        resumeAt = now + cancelBackoffMs
+        this.resumeAt = resumeAt
         val it = pointers.values.iterator()
         while (it.hasNext()) {
             val p = it.next()
             if (p.lifting) it.remove() else p.down = false // re-press at its press point
         }
     }
-
-    fun onDispatchFailed(generation: Int, now: Long) = onCancelled(generation, now)
 
     fun snapshot(): List<PointerSnapshot> = pointers.values.map { PointerSnapshot(it.key, it.x, it.y, it.down) }
 

@@ -8,6 +8,9 @@
     <string name="a11y_service_description">Clu turns small movements of your device into touches and joystick drags in games, for people who find touch screens hard to use. It needs to perform gestures on your behalf and to see which app is in front, so it can pause itself in Settings and on the home screen. It also listens for keys you choose, such as a switch interface or volume buttons. Clu does not read what is on your screen.</string>
 
     <!-- HUD -->
+    <string name="hud_window_title">Clu controls</string>
+    <string name="visualizer_window_title">Clu touch points</string>
+    <string name="editor_window_title">Clu layout editor</string>
     <string name="hud_indicator_description">Clu tilt indicator</string>
     <string name="hud_toggle_controls">show or hide Clu controls</string>
     <string name="hud_state_paused">Paused</string>
@@ -47,6 +50,7 @@
     <string name="notice_paused_rest">Break time. Hold any direction to resume.</string>
     <string name="notice_paused_screen_off">Paused because the screen turned off</string>
     <string name="notice_paused_layout">Paused while you edit the layout</string>
+    <string name="notice_paused_error">Paused: Clu hit an internal problem. Tap Resume to carry on, and please share a device report.</string>
     <string name="notice_resumed">Resumed</string>
     <plurals name="notice_rest_reminder">
         <item quantity="one">You have played for %1$d minute. Maybe take a short break?</item>
@@ -55,6 +59,7 @@
     <string name="notice_fatigue">Your movements look more tired than earlier. Consider a rest, or tap Recenter.</string>
     <string name="notice_profile">Profile: %1$s</string>
     <string name="notice_fgs_denied">Running without the background service. If Android stops Clu, open the app and start again.</string>
+    <string name="notice_mic_silenced">Sound click is muted: another app (often a game\'s voice chat) is using the microphone, or the microphone is switched off in quick settings.</string>
     <string name="notice_mic_denied">The sound trigger needs microphone permission. Turn it on in Clu.</string>
     <string name="notice_service_off">Turn on Clu in Accessibility settings so it can control games.</string>
     <string name="notice_overlap">This panel covers a game control. Tap Move panel.</string>
@@ -100,8 +105,12 @@
 
     <string name="setup_service_on">Accessibility service: on</string>
     <string name="setup_service_starting">Accessibility service: turned on, starting…</string>
+    <string name="setup_service_stuck">Accessibility service: turned on but not running. Open Accessibility settings, turn Clu off and on again. If that doesn\'t help, restart the phone.</string>
+    <string name="setup_service_turned_off">Accessibility service: OFF again. If you didn\'t turn it off, the phone did: \"Force stop\", phone-cleaner tools and Xiaomi\'s Ultra battery saver all switch Clu off. Turn it on again in Accessibility settings.</string>
     <string name="setup_service_off">Accessibility service: off. Turn on \"Clu motion controls\" to control games.</string>
-    <string name="setup_restricted_settings">If Clu is greyed out in Accessibility settings (common when installed outside an app store), open App info, tap the ⋮ menu and choose \"Allow restricted settings\".</string>
+    <string name="setup_restricted_settings">If Android blocks turning Clu on (\"Restricted setting\"), do these steps in this order:\n1. Tap Accessibility settings, find Clu (on Xiaomi and POCO under \"Downloaded apps\") and try to turn it on. When the \"Restricted setting\" message appears, tap OK.\n2. Tap App info, then ⋮ (top right) › \"Allow restricted settings\", and confirm with your PIN or fingerprint. This menu item only appears after step 1.\n3. Go back to Accessibility settings and turn Clu on.</string>
+    <string name="setup_installed_from_file">Clu was installed from a file, so Android will ask for the extra steps below the first time.</string>
+    <string name="setup_force_stop">Don\'t use \"Force stop\" or phone-cleaner tools on Clu: Android then switches its accessibility service off and you have to turn it on again.</string>
     <string name="setup_notifications_on">Notifications: allowed (session controls appear in the notification shade)</string>
     <string name="setup_notifications_off">Notifications: not allowed. Allow them to get Pause, Recenter and Stop in the notification shade.</string>
     <string name="setup_battery">Some phones close background apps aggressively. If Clu stops during play, set its battery usage to \"Unrestricted\".</string>
@@ -116,6 +125,11 @@
     <string name="action_app_info">App info</string>
     <string name="action_allow_notifications">Allow notifications</string>
     <string name="action_battery_settings">Battery settings</string>
+    <string name="section_xiaomi">Xiaomi, POCO and Redmi (HyperOS)</string>
+    <string name="xiaomi_checklist">HyperOS closes background apps aggressively. Set these once so Clu keeps working during games:\n1. Battery saver › \"No restrictions\" (button below).\n2. On the same page, turn off \"Pause app activity\" if you see it.\n3. Autostart › allow Clu (button below).\n4. Open Recents and lock Clu: pull its card down, or long-press it and tap the padlock.\n5. Don\'t use Ultra battery saver while playing.\nWhen you turn Clu on, Xiaomi shows a warning with a 10-second countdown before OK works. Wait for it, then confirm. A helper can make this first-time setup easier.</string>
+    <string name="xiaomi_game_turbo">Game Turbo: in its Game DND settings keep \"Don\'t open notification shade\" off if you use Clu\'s notification buttons, and turn on \"Restrict screenshot gestures\". Names can differ slightly between versions.</string>
+    <string name="action_xiaomi_battery">Battery saver</string>
+    <string name="action_xiaomi_autostart">Autostart</string>
     <string name="action_learn_moves">Learn my moves</string>
     <string name="action_duplicate">Duplicate</string>
     <string name="action_reset">Reset tuning</string>
@@ -229,6 +243,6 @@
     <string name="test_close">Close</string>
     <string name="test_copied">Report copied</string>
     <string name="test_need_service">Turn on \"Clu motion controls\" in Accessibility settings first.</string>
-    <string name="test_intro">Tap Synthetic test, or start a session and tilt. Green = finger down, white = up, red X = cancelled.</string>
+    <string name="test_intro">Tap Synthetic test, or start a session and tilt. Green = finger down, white = up, red X = cancelled. While the test runs, touch the pad once with a real finger: you should see a red X, then a new green dot about a third of a second later.</string>
     <string name="test_summary">Sent %1$d, done %2$d, failed %3$d · down %4$d, up %5$d, cancel %6$d · moves %7$d, gap p95 %8$d ms · latency p50 %9$d ms · fingers %10$d</string>
 </resources>

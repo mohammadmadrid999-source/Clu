@@ -14,15 +14,18 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import androidx.core.content.edit
 import com.clu.motion.CluApp
 import com.clu.motion.core.PipelinePhase
 import com.clu.motion.core.input.JoystickDriver
 import com.clu.motion.core.input.PointerSnapshot
 import com.clu.motion.core.input.TouchPlanner
 import com.clu.motion.core.response.StickOutput
+import com.clu.motion.core.safety.PauseReason
 import com.clu.motion.engine.MotionEngine
 import com.clu.motion.engine.SessionState
 import com.clu.motion.engine.TouchCommand
@@ -30,6 +33,7 @@ import com.clu.motion.overlay.OverlayController
 import com.clu.motion.profile.ControlProfile
 import com.clu.motion.ui.InjectionTestActivity
 import com.clu.motion.ui.MainActivity
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -56,7 +60,9 @@ class InputDispatcherService : AccessibilityService() {
 
     private lateinit var engine: MotionEngine
     private lateinit var gate: ForegroundAppGate
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Service coroutine failed", e) },
+    )
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var injectThread: HandlerThread? = null
@@ -87,7 +93,16 @@ class InputDispatcherService : AccessibilityService() {
     private val tick = object : Runnable {
         override fun run() {
             val now = SystemClock.uptimeMillis()
-            val next = step(now)
+            // A crash here would leave the service "enabled but not running" until the user
+            // toggles it (Android 16); pause play instead and keep the service alive.
+            val next = try {
+                step(now)
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "Injection tick failed", e)
+                planner.releaseAll()
+                engine.pause(PauseReason.ERROR)
+                IDLE_TICK_MS
+            }
             if (next > 0) {
                 injectHandler?.postAtTime(this, now + next)
             } else {
@@ -128,20 +143,30 @@ class InputDispatcherService : AccessibilityService() {
             }
         }
         _connected.value = true
+        getSharedPreferences(HEALTH_PREFS, MODE_PRIVATE).edit { putBoolean(KEY_EVER_CONNECTED, true) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val app = gate.onWindowStateChanged(event.packageName, event.className) ?: return
-        engine.onForegroundPackage(app)
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || !::gate.isInitialized) return
+        try {
+            val app = gate.onWindowStateChanged(event.packageName, event.className) ?: return
+            engine.onForegroundPackage(app)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Window event failed", e)
+        }
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (!::engine.isInitialized) return false
-        return when (event.action) {
-            KeyEvent.ACTION_DOWN -> engine.onKey(event.keyCode, down = true, repeatCount = event.repeatCount)
-            KeyEvent.ACTION_UP -> engine.onKey(event.keyCode, down = false, repeatCount = 0)
-            else -> false
+        return try {
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> engine.onKey(event.keyCode, down = true, repeatCount = event.repeatCount)
+                KeyEvent.ACTION_UP -> engine.onKey(event.keyCode, down = false, repeatCount = 0)
+                else -> false
+            }
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Key event failed", e)
+            false // never swallow a key because of our own bug
         }
     }
 
@@ -175,6 +200,17 @@ class InputDispatcherService : AccessibilityService() {
     }
 
     // ---- Injection thread --------------------------------------------------------------------
+
+    /**
+     * A real finger touched a window other than the HUD (reported by the HUD's outside-touch
+     * watch). Main thread. On Android 16 the platform silently invalidates our injected stream
+     * in the touched window, so held pointers must re-press; see TouchPlanner.onExternalTouch.
+     */
+    fun onRealTouch() {
+        injectHandler?.post {
+            if (planner.onExternalTouch(SystemClock.uptimeMillis())) engine.injectionStats.onExternalTouch()
+        }
+    }
 
     private fun startTicking() {
         if (ticking) return
@@ -299,6 +335,9 @@ class InputDispatcherService : AccessibilityService() {
     }
 
     companion object {
+        private const val TAG = "InputDispatcher"
+        const val HEALTH_PREFS = "service_health"
+        const val KEY_EVER_CONNECTED = "ever_connected"
         private const val STALE_FRAME_MS = 250L
         private const val MIN_TICK_MS = 8L
         private const val MAX_TICK_MS = 50L

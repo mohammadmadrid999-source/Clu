@@ -5,11 +5,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
+import android.media.AudioRecordingConfiguration
 import android.media.MediaRecorder
+import android.os.Build
 import android.os.Process
 import android.os.SystemClock
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.clu.motion.core.audio.ClickOnsetDetector
 import com.clu.motion.profile.SoundTriggerConfig
@@ -22,7 +26,15 @@ import com.clu.motion.profile.SoundTriggerConfig
  * is in the background, Android only delivers microphone audio to a foreground service of type
  * "microphone" that was started while the app was visible (see MotionSessionService).
  */
-class AcousticClickTrigger(private val context: Context, private val onClick: () -> Unit) {
+class AcousticClickTrigger(
+    private val context: Context,
+    private val onClick: () -> Unit,
+    /**
+     * Android can hand Clu silence instead of audio, e.g. while a game's voice chat holds the
+     * microphone or the user's mic privacy toggle is on. Called (main thread) when that changes.
+     */
+    private val onSilenced: (Boolean) -> Unit = {},
+) {
 
     /** Identity of the current capture run; a stale thread can never stop a newer one. */
     @Volatile
@@ -84,8 +96,10 @@ class AcousticClickTrigger(private val context: Context, private val onClick: ()
 
         val detector = ClickOnsetDetector(config)
         val buffer = ShortArray(FRAME_SAMPLES)
+        var silenceWatch: AudioManager.AudioRecordingCallback? = null
         try {
             record.startRecording()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) silenceWatch = watchSilencing(record, run)
             while (activeRun === run) {
                 val n = record.read(buffer, 0, FRAME_SAMPLES)
                 if (n < 0) break
@@ -95,10 +109,30 @@ class AcousticClickTrigger(private val context: Context, private val onClick: ()
         } catch (e: IllegalStateException) {
             Log.w(TAG, "Audio capture failed", e)
         } finally {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) silenceWatch?.let { record.unregisterAudioRecordingCallback(it) }
             if (record.recordingState == AudioRecord.RECORDSTATE_RECORDING) record.stop()
             record.release()
             finish(run)
         }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun watchSilencing(record: AudioRecord, run: Any): AudioManager.AudioRecordingCallback {
+        var last: Boolean? = null
+        fun report(silenced: Boolean) {
+            if (activeRun !== run || silenced == last) return
+            last = silenced
+            onSilenced(silenced)
+        }
+        val callback = object : AudioManager.AudioRecordingCallback() {
+            override fun onRecordingConfigChanged(configs: List<AudioRecordingConfiguration>) {
+                configs.firstOrNull { it.clientAudioSessionId == record.audioSessionId }?.let { report(it.isClientSilenced) }
+            }
+        }
+        val main = ContextCompat.getMainExecutor(context)
+        record.registerAudioRecordingCallback(main, callback)
+        record.activeRecordingConfiguration?.let { config -> main.execute { report(config.isClientSilenced) } }
+        return callback
     }
 
     private fun finish(run: Any) {

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import com.clu.motion.R
@@ -27,6 +28,7 @@ import com.clu.motion.profile.TriggerKind
 import com.clu.motion.sensor.MotionProcessor
 import com.clu.motion.service.MotionSessionService
 import com.clu.motion.trigger.AcousticClickTrigger
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -74,7 +76,9 @@ data class Notice(val text: String, val important: Boolean = false)
  */
 class MotionEngine(private val app: Context, private val repository: ProfileRepository) {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Engine coroutine failed", e) },
+    )
     private val mainHandler = Handler(Looper.getMainLooper())
 
     val profiles: StateFlow<ProfileState> = repository.state
@@ -118,9 +122,14 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
     /** Non-null while the synthetic injection test drives the virtual stick instead of sensors. */
     val selfTest: StateFlow<SelfTest?> = _selfTest.asStateFlow()
 
-    private val acoustic = AcousticClickTrigger(app) { onTrigger(TriggerKind.SOUND_CLICK, 0, TriggerPhase.PULSE) }
+    private val acoustic = AcousticClickTrigger(
+        app,
+        onClick = { onTrigger(TriggerKind.SOUND_CLICK, 0, TriggerPhase.PULSE) },
+        onSilenced = { silenced -> if (silenced && _session.value != SessionState.Stopped) notice(R.string.notice_mic_silenced, important = true) },
+    )
     private var screenReceiverRegistered = false
     private var lastProfileId: String? = null
+    private var lastSoundEnabled: Boolean? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -145,9 +154,13 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
                 if (_session.value != SessionState.Stopped) {
                     // Bindings and layout may differ: drop anything held under the old profile.
                     if (lastProfileId != null && lastProfileId != profile.id) commands.trySend(TouchCommand.ReleaseAll)
+                    // The foreground service only gains its "microphone" type when (re)started, so a
+                    // sound trigger switched on mid-session needs it promoted again (Android 11+).
+                    if (profile.sound.enabled && lastSoundEnabled == false) MotionSessionService.start(app)
                     updateAcoustic(profile)
                 }
                 lastProfileId = profile.id
+                lastSoundEnabled = profile.sound.enabled
             }
         }
     }
@@ -197,6 +210,7 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
                 PauseReason.REST_BREAK -> R.string.notice_paused_rest
                 PauseReason.SCREEN_OFF -> R.string.notice_paused_screen_off
                 PauseReason.LAYOUT_EDIT -> R.string.notice_paused_layout
+                PauseReason.ERROR -> R.string.notice_paused_error
             },
             important = reason != PauseReason.USER && reason != PauseReason.LAYOUT_EDIT,
         )
@@ -355,6 +369,7 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
                 updateActiveProfile { it.copy(axes = it.axes.copy(mode = AxisMode.LEARNED, learned = event.axes)) }
                 notice(R.string.notice_learned)
             }
+            is PipelineEvent.Fault -> pause(PauseReason.ERROR)
         }
     }
 
@@ -439,4 +454,8 @@ class MotionEngine(private val app: Context, private val repository: ProfileRepo
 
     private val ActionType.isTouch
         get() = this == ActionType.TAP_BUTTON || this == ActionType.HOLD_BUTTON || this == ActionType.TOGGLE_BUTTON
+
+    private companion object {
+        const val TAG = "MotionEngine"
+    }
 }

@@ -14,6 +14,8 @@ data class InjectionSnapshot(
     val cancelled: Int,
     val rejected: Int,
     val backpressureSkips: Int,
+    /** Real finger touches elsewhere that forced held pointers to re-press (Android 16 behaviour). */
+    val externalTouches: Int,
     /** Age of the motion frame used for a dispatch (sensor frame → dispatchGesture). */
     val frameAge: Percentiles?,
     /** dispatchGesture → the pad receiving a pointer at that segment's end point. */
@@ -50,6 +52,7 @@ class InjectionStats(private val window: Int = 600) {
     private var cancelled = 0
     private var rejected = 0
     private var backpressureSkips = 0
+    private var externalTouches = 0
     private val frameAges = Samples(window)
     private val deliveries = Samples(window)
     private val eventAges = Samples(window)
@@ -68,6 +71,7 @@ class InjectionStats(private val window: Int = 600) {
         cancelled = 0
         rejected = 0
         backpressureSkips = 0
+        externalTouches = 0
         frameAges.clear()
         deliveries.clear()
         eventAges.clear()
@@ -96,6 +100,7 @@ class InjectionStats(private val window: Int = 600) {
     fun onCancelled() = count { cancelled++ }
     fun onRejected() = count { rejected++ }
     fun onBackpressure() = count { backpressureSkips++ }
+    fun onExternalTouch() = count { externalTouches++ }
 
     /**
      * One MotionEvent seen by the test pad. Coordinates are absolute display pixels;
@@ -135,6 +140,7 @@ class InjectionStats(private val window: Int = 600) {
             cancelled = cancelled,
             rejected = rejected,
             backpressureSkips = backpressureSkips,
+            externalTouches = externalTouches,
             frameAge = frameAges.percentiles(),
             dispatchToDelivery = deliveries.percentiles(),
             eventAge = eventAges.percentiles(),

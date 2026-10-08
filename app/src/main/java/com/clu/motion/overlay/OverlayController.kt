@@ -1,5 +1,6 @@
 package com.clu.motion.overlay
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -10,10 +11,13 @@ import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import android.util.TypedValue
 import android.view.Choreographer
 import android.view.ContextThemeWrapper
 import android.view.Gravity
+import android.view.KeyCharacterMap
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -36,6 +40,7 @@ import com.clu.motion.engine.SessionState
 import com.clu.motion.input.InputDispatcherService
 import com.clu.motion.profile.ControlProfile
 import com.clu.motion.profile.JoystickMode
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,7 +64,7 @@ import kotlin.math.roundToInt
  *  - Touch visualizer (optional): full-screen, NOT_TOUCHABLE, shows targets and virtual fingers.
  *  - Layout editor: full-screen, touchable, used while play is paused.
  *
- * Rendering is pulled on vsync and throttled to [RENDER_INTERVAL_NS] (~30 Hz) so the HUD never
+ * Rendering is pulled on vsync and throttled to [RENDER_INTERVAL_MS] (~30 Hz) so the HUD never
  * competes with the game for frames; nothing is drawn per sensor sample. Main thread only.
  */
 class OverlayController(
@@ -102,26 +107,31 @@ class OverlayController(
     // Rendering
     private var notice: Notice? = null
     private var noticeUntil = 0L
-    private var lastRenderNanos = 0L
     private var rendering = false
     private var overlapWarned = false
 
+    /**
+     * Vsync-aligned but only ~30 times a second: a delayed frame callback rather than one per
+     * vsync, so a 120 Hz panel doesn't wake the main thread 120 times a second during play.
+     */
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!attached) {
                 rendering = false
                 return
             }
-            if (frameTimeNanos - lastRenderNanos >= RENDER_INTERVAL_NS) {
-                lastRenderNanos = frameTimeNanos
+            try {
                 render()
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "HUD render failed", e) // a broken HUD must not take the service down
             }
-            val idle = engine.session.value == SessionState.Stopped && SystemClock.uptimeMillis() > noticeUntil
+            val idle = engine.session.value == SessionState.Stopped &&
+                engine.selfTest.value == null &&
+                SystemClock.uptimeMillis() > noticeUntil
             if (idle) {
-                render()
                 rendering = false
             } else {
-                Choreographer.getInstance().postFrameCallback(this)
+                Choreographer.getInstance().postFrameCallbackDelayed(this, RENDER_INTERVAL_MS)
             }
         }
     }
@@ -131,7 +141,9 @@ class OverlayController(
         attached = true
         buildHud()
         wm.addView(hudRoot, hudParams)
-        val s = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+        val s = CoroutineScope(
+            SupervisorJob() + Dispatchers.Main.immediate + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Overlay coroutine failed", e) },
+        )
         scope = s
         s.launch { engine.notices.collect(::showNotice) }
         s.launch {
@@ -185,8 +197,10 @@ class OverlayController(
 
     // ---- HUD ---------------------------------------------------------------------------------
 
+    @SuppressLint("ClickableViewAccessibility") // The touch listener only observes ACTION_OUTSIDE; it never clicks or consumes.
     private fun buildHud() {
         indicator = TiltIndicatorView(ctx).apply {
+            lowFrameRate()
             setOnClickListener { toggleExpanded() }
             ViewCompat.replaceAccessibilityAction(
                 this,
@@ -196,6 +210,7 @@ class OverlayController(
             )
         }
         status = TextView(ctx).apply {
+            lowFrameRate()
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             maxLines = 4
@@ -229,6 +244,14 @@ class OverlayController(
             addView(header)
             addView(controls)
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> checkOverlap() }
+            // Real touches elsewhere arrive here as ACTION_OUTSIDE (FLAG_WATCH_OUTSIDE_TOUCH).
+            // Our own injected events carry deviceId VIRTUAL_KEYBOARD (-1): ignore those.
+            setOnTouchListener { _, e ->
+                if (e.actionMasked == MotionEvent.ACTION_OUTSIDE && e.deviceId != KeyCharacterMap.VIRTUAL_KEYBOARD) {
+                    service.onRealTouch()
+                }
+                false
+            }
         }
         applyExpanded()
 
@@ -236,7 +259,8 @@ class OverlayController(
             gravity = ANCHORS[anchor]
             x = dp(8)
             y = dp(8)
-            title = "Clu HUD"
+            flags = flags or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+            title = ctx.getString(R.string.hud_window_title)
         }
     }
 
@@ -335,8 +359,14 @@ class OverlayController(
         }
         val (w, h) = displaySize()
         val view = visualizer ?: TouchVisualizerView(ctx).also {
+            it.lowFrameRate()
             visualizer = it
-            wm.addView(it, fullScreenParams(touchable = false).apply { title = "Clu touch points" })
+            wm.addView(
+                it,
+                fullScreenParams(touchable = false).apply {
+                    title = ctx.getString(R.string.visualizer_window_title)
+                },
+            )
         }
         view.joystickLabel = joystickName(profile)
         view.update(profile.joystick, profile.buttons, touches.value, w, h)
@@ -417,7 +447,13 @@ class OverlayController(
             )
         }
         editorRoot = root
-        wm.addView(root, fullScreenParams(touchable = true).apply { title = "Clu layout editor" })
+        ViewCompat.setAccessibilityPaneTitle(root, ctx.getString(R.string.editor_window_title))
+        wm.addView(
+            root,
+            fullScreenParams(touchable = true).apply {
+                title = ctx.getString(R.string.editor_window_title)
+            },
+        )
         updateEditorStatus()
     }
 
@@ -585,15 +621,23 @@ class OverlayController(
         AxisLearner.Step.DOWN -> R.string.learn_down
     }
 
+    /** Android 15+: tell the refresh-rate policy this view's updates don't need a high rate. */
+    private fun View.lowFrameRate() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            setRequestedFrameRate(View.REQUESTED_FRAME_RATE_CATEGORY_LOW)
+        }
+    }
+
     private fun dp(v: Int) = (v * density).roundToInt()
 
     private companion object {
+        const val TAG = "OverlayController"
         const val PREFS = "hud"
         const val KEY_EXPANDED = "expanded"
         const val KEY_ANCHOR = "anchor"
         const val INDICATOR_DP = 72
         const val STATUS_WIDTH_DP = 168
-        const val RENDER_INTERVAL_NS = 33_000_000L
+        const val RENDER_INTERVAL_MS = 33L
         const val NOTICE_MS = 3_000L
         const val IMPORTANT_NOTICE_MS = 7_000L
         const val NUDGE_STEP = 0.01

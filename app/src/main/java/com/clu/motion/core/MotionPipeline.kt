@@ -42,6 +42,9 @@ sealed interface PipelineEvent {
     data class Safety(val event: SafetyEvent) : PipelineEvent
     data class Calibrated(val result: CalibrationResult) : PipelineEvent
     data class AxesLearned(val axes: LearnedAxes) : PipelineEvent
+
+    /** Processing a sample threw; reported by the sensor front-end, never by the pipeline itself. */
+    data class Fault(val error: Throwable) : PipelineEvent
 }
 
 /** One processed sample, published to the injector and the HUD. */

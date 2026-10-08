@@ -28,9 +28,11 @@ tremor-prone conditions.
 
 ## Documentation
 
+- **[docs/POCO_X7_PRO.md](docs/POCO_X7_PRO.md)**: install, setup and a 5-minute device check on
+  the POCO X7 Pro (Android 16, Xiaomi HyperOS), the first target phone.
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: system architecture, signal pipeline,
-  continuous gesture injection, latency budget, permissions and platform policy, test coverage
-  and verification status.
+  continuous gesture injection (including Android 16's changed real-touch handling), latency
+  budget, permissions and platform policy, test coverage and verification status.
 
 ## Code map
 
@@ -50,17 +52,26 @@ tremor-prone conditions.
 Requirements: JDK 17+ and the Android SDK (platform 36). Point `local.properties` at it with
 `sdk.dir=/path/to/sdk`, or set `ANDROID_HOME`.
 
+**Ready-made APK:** every push to a branch publishes a test-signed build as a GitHub prerelease
+named `test-build-<branch>` (see Releases), so you can install it straight from the phone.
+Builds share one committed test key and use the commit count as `versionCode`, so they update
+each other in place.
+
 ```bash
-./gradlew test             # 86 JVM unit tests for the whole signal chain and touch planner
+./gradlew test             # 98 JVM unit tests: signal chain, touch planner, self-test, policies
 ./gradlew lintDebug        # Android Lint
 ./gradlew assembleDebug    # app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Getting started on a phone
 
-1. Install the debug APK and open **Clu**.
-2. Turn on **Clu motion controls** under **Settings → Accessibility**. If it is greyed out
-   (sideloaded app on Android 13+), open **App info → ⋮ → Allow restricted settings** first.
+On Xiaomi, POCO or Redmi phones, follow [docs/POCO_X7_PRO.md](docs/POCO_X7_PRO.md) instead: HyperOS
+needs a few extra settings.
+
+1. Install the APK and open **Clu**.
+2. Turn on **Clu motion controls** under **Settings → Accessibility**. If Android says
+   "Restricted setting" (APK installed from a file on Android 13+), follow the three ordered
+   steps shown in Clu's Setup section.
 3. Allow notifications to get Pause, Recenter and Stop in the notification shade.
 4. Pick a profile, hold the phone (or your head) comfortably and tap **Start**. Hold still for
    about 2 seconds while Clu sets your center.
@@ -69,5 +80,6 @@ Requirements: JDK 17+ and the Android SDK (platform 36). Point `local.properties
 6. Optional: tap **Learn moves** and follow the prompts so Clu learns your range of motion.
 
 > **Status:** the Android code compiles, passes Lint and builds a minified release, and the
-> core logic is unit-tested. It has not yet been run on a physical device or emulator. See the
-> device checklist in the architecture doc before relying on it.
+> core logic is unit-tested. It has not yet been run on a physical device or emulator. Clu
+> includes its own on-device check (Setup › **Injection test** and **Share device report**); run
+> it first on any new phone.

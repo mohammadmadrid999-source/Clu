@@ -152,7 +152,23 @@ class MotionProcessor(
             }
         }
 
+        private var faultReported = false
+
         override fun onSensorChanged(event: SensorEvent) {
+            // An exception escaping here would crash the process, which on Android 16 leaves the
+            // accessibility service "enabled but not running". Report once and keep the thread alive.
+            try {
+                handle(event)
+            } catch (e: RuntimeException) {
+                Log.e(TAG, "Sensor sample failed", e)
+                if (!faultReported) {
+                    faultReported = true
+                    deliver(PipelineEvent.Fault(e))
+                }
+            }
+        }
+
+        private fun handle(event: SensorEvent) {
             val v = event.values
             when (event.sensor.type) {
                 Sensor.TYPE_ROTATION_VECTOR, Sensor.TYPE_GAME_ROTATION_VECTOR ->
