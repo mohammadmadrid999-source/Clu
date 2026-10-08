@@ -294,10 +294,12 @@ class InputDispatcherService : AccessibilityService() {
         when (command) {
             is TouchCommand.Tap -> if (live) {
                 val b = button(profile, command.buttonId) ?: return
+                freezeAimForShot(profile, now)
                 planner.press(buttonKey(b.id), b.px, b.py, holdMs = b.tapMs, now = now)
             }
             is TouchCommand.Press -> if (live) {
                 val b = button(profile, command.buttonId) ?: return
+                freezeAimForShot(profile, now)
                 planner.press(buttonKey(b.id), b.px, b.py, now = now)
             }
             is TouchCommand.Release -> planner.release(buttonKey(command.buttonId))
@@ -308,6 +310,13 @@ class InputDispatcherService : AccessibilityService() {
             }
             is TouchCommand.Global -> mainHandler.post { performGlobalAction(command.action) }
             TouchCommand.ReleaseAll -> planner.releaseAll()
+        }
+    }
+
+    /** While aiming, a shot holds the aim still so it can't be pulled off the target. */
+    private fun freezeAimForShot(profile: ControlProfile, now: Long) {
+        if (profile.joystick.mode == JoystickMode.AIM && profile.aim.freezeOnFireMs > 0) {
+            joystick.freezeAim(now + profile.aim.freezeOnFireMs)
         }
     }
 

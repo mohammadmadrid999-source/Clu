@@ -288,6 +288,12 @@ class JoystickDriver(var config: JoystickConfig, var aim: AimConfig = AimConfig(
     private var gripMoved = false
     private var lastAim: AimSample? = null
     private var lastAimMotionAt = Long.MIN_VALUE / 2
+    private var aimFrozenUntil = Long.MIN_VALUE / 2
+
+    /** Holds the aim still until [until] (a shot is being fired); motion meanwhile is discarded. */
+    fun freezeAim(until: Long) {
+        if (until > aimFrozenUntil) aimFrozenUntil = until
+    }
 
     /**
      * @param aimSample the newest cumulative aim; null when there is none (no session, stick
@@ -362,10 +368,15 @@ class JoystickDriver(var config: JoystickConfig, var aim: AimConfig = AimConfig(
                     dy = (aimSample.y - previous.y) * unitPx
                 }
                 lastAim = aimSample
+                val frozen = now < aimFrozenUntil
+                if (frozen) {
+                    dx = 0.0
+                    dy = 0.0
+                }
                 // Edge turn: a tilt held beyond the threshold keeps turning the view.
                 val mag = stick.magnitude
                 val from = aim.edgeTurnFrom
-                if (from > 0 && from < 1 && mag > from) {
+                if (!frozen && from > 0 && from < 1 && mag > from) {
                     val excess = ((mag - from) / (1 - from)).coerceIn(0.0, 1.0)
                     val scale = if (aimSample?.precision == true) aim.precisionScale else 1.0
                     val speed = aim.edgeTurnSpeed * unitPx * excess * scale

@@ -306,6 +306,9 @@ class MainActivity : ComponentActivity() {
         slider(R.string.label_aim_edge_speed, 0.2, 5.0, 0.1, { getString(R.string.fmt_per_s, it) }, { it.aim.edgeTurnSpeed }) { p, v ->
             p.copy(aim = p.aim.copy(edgeTurnSpeed = v))
         }
+        slider(R.string.label_aim_freeze, 0.0, 1000.0, 50.0, { if (it == 0.0) getString(R.string.off) else getString(R.string.fmt_ms, it) }, {
+            it.aim.freezeOnFireMs.toDouble()
+        }) { p, v -> p.copy(aim = p.aim.copy(freezeOnFireMs = v.toLong())) }
         slider(R.string.label_aim_idle, 300.0, 5000.0, 100.0, { getString(R.string.fmt_ms, it) }, { it.aim.releaseAfterIdleMs.toDouble() }) { p, v ->
             p.copy(aim = p.aim.copy(releaseAfterIdleMs = v.toLong()))
         }

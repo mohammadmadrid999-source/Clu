@@ -126,14 +126,17 @@ stop exactly on a target.)
    fire and jump buttons. Drag **A** onto the fire button. **Save**.
 3. Hold still about 2 s at the start (calibration), then aim with small, slow movements.
 
-The Shooter aim preset's bindings:
+The Shooter aim preset only aims: walking by tilt is off, because it kept pulling the aim off
+target. It is tuned for tremor (heavy smoothing, low sensitivity), and **the aim freezes for a
+third of a second whenever you fire**, so the shot lands where you aimed. Its bindings:
 
 | You do | Clu does |
 |---|---|
-| Twist right, a mouth click/sound (if Sound is on), Space or volume up | Fire (button A) |
-| Twist left, Enter or the headset button | Switch between walking (stick) and aiming |
-| Volume down | Precision aim on/off (slower, finer aim, like a scope) |
-| Tilt further than 80 % of your range and hold | Keep turning (for turning around) |
+| Volume up, Space, a mouth click/sound (if Sound is on) or twist right | Fire (button A) |
+| Volume down, Enter, the headset button or twist left | Precision aim on/off (slower, finer aim, like a scope) |
+| Tilt further than 85 % of your range and hold | Keep turning (for turning around) |
+
+Prefer a button or a sound to fire: twisting moves the phone at the moment of the shot.
 
 Tune it under **Aiming** in Clu:
 
@@ -141,6 +144,7 @@ Tune it under **Aiming** in Clu:
   multiplies it too.
 - **Aim shakes:** lower *Steadiness* (Tremor section) or raise *Ignore motion slower than*.
 - **Small corrections feel too slow:** lower *Ignore motion slower than*.
+- **The shot still drifts off the target:** raise *Hold the aim still when firing*.
 - **Hard to make the last small step onto a target:** turn on *Precision aim* (volume down)
   for that moment, and lower *Precision aim strength* for an even finer aim.
 - **Turning around takes long:** raise *Turn speed at the edge*, or *Speed boost for fast

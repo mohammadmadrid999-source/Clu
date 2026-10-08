@@ -224,6 +224,11 @@ data class AimConfig(
     val edgeTurnSpeed: Double = 1.5,
     /** Lift the finger after this long without aim motion; it re-grips at the pad centre on the next move. */
     val releaseAfterIdleMs: Long = 1500,
+    /**
+     * Firing (a tap or press of any button) freezes the aim this long, so the tremor or the
+     * movement that triggered the shot can't pull it off the target. 0 = off.
+     */
+    val freezeOnFireMs: Long = 300,
 )
 
 @Serializable

@@ -210,6 +210,7 @@
     <string name="label_aim_accel">Speed boost for fast movements</string>
     <string name="label_aim_edge">Keep turning when tilted beyond</string>
     <string name="label_aim_edge_speed">Turn speed at the edge</string>
+    <string name="label_aim_freeze">Hold the aim still when firing</string>
     <string name="label_aim_idle">Let go of the aim pad after resting</string>
     <string name="fmt_times">×%1$.1f</string>
     <string name="fmt_per_s">%1$.1f per s</string>

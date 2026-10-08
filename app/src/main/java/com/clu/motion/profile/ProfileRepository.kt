@@ -81,7 +81,7 @@ class ProfileRepository(private val context: Context) {
 
     /** Stored profiles, plus any built-in preset added since they were saved (presets can't be deleted). */
     private fun stored(raw: String?): List<ControlProfile> {
-        val profiles = raw?.let(::decode)?.takeIf { it.isNotEmpty() } ?: return Presets.all()
+        val profiles = raw?.let(::decode)?.takeIf { it.isNotEmpty() }?.map(Presets::upgrade) ?: return Presets.all()
         val missing = Presets.all().filter { preset -> profiles.none { it.id == preset.id } }
         return profiles + missing
     }

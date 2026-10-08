@@ -34,4 +34,25 @@ class ProfileSerializationTest {
     fun presetIdsAreUnique() {
         assertEquals(Presets.all().size, Presets.all().map { it.id }.toSet().size)
     }
+
+    @Test
+    fun anOldShooterPresetIsUpgradedToAimOnlyKeepingTheLayout() {
+        val old = Presets.shooter().copy(
+            bindings = listOf(TriggerBinding(TriggerKind.TWIST_LEFT, ActionType.SWITCH_MOVE_AIM)),
+            aim = AimConfig(padX = 0.61, padY = 0.4),
+            buttons = listOf(VirtualButton(1, "A", 0.9, 0.85)),
+            linkedPackages = listOf("com.example.game"),
+        )
+        val up = Presets.upgrade(old)
+        assertTrue(up.bindings.none { it.action == ActionType.SWITCH_MOVE_AIM })
+        assertEquals(JoystickMode.AIM, up.joystick.mode)
+        assertEquals(0.61, up.aim.padX, 0.0)
+        assertEquals(Presets.shooter().aim.freezeOnFireMs, up.aim.freezeOnFireMs)
+        assertEquals(old.buttons, up.buttons)
+        assertEquals(old.linkedPackages, up.linkedPackages)
+        // Up-to-date and user profiles are left alone.
+        assertEquals(Presets.shooter(), Presets.upgrade(Presets.shooter()))
+        val user = old.copy(id = "user.1")
+        assertEquals(user, Presets.upgrade(user))
+    }
 }

@@ -299,7 +299,9 @@ These are checked against `MotionEventInjector` / `GestureDescription` in AOSP (
   between walking and aiming (`SWITCH_MOVE_AIM`). The finger moves by aim × `sensitivity` × the
   short screen side. Holding a tilt beyond `edgeTurnFrom` (80 % of the range) keeps turning, for
   turns larger than the user's range. After `releaseAfterIdleMs` without a pixel of motion the
-  finger lets go. While aiming, dwell presses are ignored, since holding a tilt at the edge turns
+  finger lets go. Firing (any button tap or press) freezes the aim for `freezeOnFireMs`
+  (300 ms; 350 ms in Shooter aim), discarding motion meanwhile, so the tremor or the movement that
+  triggered the shot can't pull it off target. While aiming, dwell presses are ignored, since holding a tilt at the edge turns
   the view.
 - **Look pads (CAMERA_DRAG, AIM).** Motion is accumulated in sub-pixel precision. The finger only
   moves by whole pixels and the fraction stays pending, so very slow aim adds up instead of being

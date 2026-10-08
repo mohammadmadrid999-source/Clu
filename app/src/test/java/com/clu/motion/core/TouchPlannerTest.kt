@@ -414,6 +414,23 @@ class AimDriverTest {
     }
 
     @Test
+    fun firingFreezesTheAimSoTremorCantPullItOffTarget() {
+        val p = planner()
+        val d = JoystickDriver(cfg, aim)
+        drive(p, 0L..160L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.01 * t / 16, 0.0)) }
+        val before = p.snapshot().single().x
+        d.freezeAim(176 + 300)
+        // A shake during the shot (and an edge-turn tilt) moves nothing while frozen…
+        val frozen = drive(p, 176L..464L) { t -> d.update(StickOutput(0.95, 0.0), true, t, w, h, p, AimSample(0.1 + 0.02 * ((t / 16) % 2), 0.0)) }
+        assertTrue(frozen.none { !it.isNewStroke && it.toX != it.fromX })
+        assertEquals(before, p.snapshot().single().x)
+        // …and aiming continues normally afterwards, without catching up the frozen motion.
+        val after = drive(p, 480L..560L) { t -> d.update(StickOutput.ZERO, true, t, w, h, p, AimSample(0.12 + 0.01 * (t - 464) / 16, 0.0)) }
+        val moved = after.filter { !it.isNewStroke }.sumOf { it.toX - it.fromX }
+        assertTrue("moved $moved", moved in 15..40)
+    }
+
+    @Test
     fun noAimSampleMeansNoMotion() {
         val p = planner()
         val d = JoystickDriver(cfg, aim)
